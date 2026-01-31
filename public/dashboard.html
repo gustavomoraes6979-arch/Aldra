@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Aldra — Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    :root {
+      --azul-escuro: #053F6B;
+      --azul-principal: #0A6CBD;
+      --verde-aldra: #3BB273;
+      --cinza-bg: #F4F7FA;
+      --cinza-borda: #DCE2E8;
+      --white: #ffffff;
+      --radius: 12px;
+      --shadow: 0 6px 16px rgba(5, 25, 45, 0.08);
+    }
+
+    body {
+      margin: 0;
+      background: var(--cinza-bg);
+      font-family: Inter, Arial, sans-serif;
+    }
+
+    header {
+      background: var(--white);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--cinza-borda);
+      box-shadow: var(--shadow);
+    }
+
+    header .left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    header img {
+      height: 38px;
+    }
+
+    header h1 {
+      font-size: 20px;
+      color: var(--azul-escuro);
+      margin: 0;
+    }
+
+    header button {
+      background: #e74c3c;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .menu {
+      display: flex;
+      gap: 12px;
+      padding: 14px 20px;
+      background: var(--white);
+      border-bottom: 1px solid var(--cinza-borda);
+      overflow-x: auto;
+    }
+
+    .menu button {
+      padding: 10px 18px;
+      background: var(--azul-principal);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .section {
+      background: var(--white);
+      margin: 28px;
+      padding: 28px;
+      border-radius: var(--radius);
+      border: 1px solid var(--cinza-borda);
+      box-shadow: var(--shadow);
+      display: none;
+    }
+
+    textarea, input, select {
+      width: 100%;
+      padding: 14px;
+      margin-top: 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--cinza-borda);
+    }
+
+    textarea {
+      min-height: 160px;
+    }
+
+    .action {
+      background: var(--verde-aldra);
+      color: white;
+      padding: 12px 22px;
+      border-radius: var(--radius);
+      border: none;
+      cursor: pointer;
+      margin-top: 14px;
+      font-weight: 700;
+    }
+
+    iframe {
+      width: 100%;
+      height: 80vh;
+      border: none;
+      border-radius: var(--radius);
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <div class="left">
+    <img src="/img/logo.png" alt="Aldra">
+    <h1>Aldra — Plataforma Administrativa</h1>
+  </div>
+  <button onclick="logout()">Sair</button>
+</header>
+
+<div class="menu">
+  <button onclick="showSection('Pdf')">📄 PDF</button>
+  <button onclick="showSection('Chat')">💬 Chat IA</button>
+  <button onclick="showSection('Contrato')">📜 Contratos</button>
+  <button onclick="showSection('Relatorios')">📑 Relatórios</button>
+  <button onclick="showSection('Cobrancas')">💰 Cobranças</button>
+  <button onclick="showSection('CRM')">📊 CRM</button>
+</div>
+
+<div id="sectionPdf" class="section">
+  <h2>📄 Analisar PDF</h2>
+  <input type="file" accept="application/pdf">
+  <textarea placeholder="Resultado aparecerá aqui..."></textarea>
+</div>
+
+<div id="sectionChat" class="section">
+  <h2>💬 Chat Inteligente</h2>
+  <textarea readonly></textarea>
+  <input placeholder="Digite sua mensagem...">
+  <button class="action">Enviar</button>
+</div>
+
+<div id="sectionContrato" class="section">
+  <h2>📜 Gerar Contrato</h2>
+  <textarea placeholder="Descreva o contrato..."></textarea>
+  <button class="action">Gerar Contrato</button>
+  <textarea></textarea>
+</div>
+
+<div id="sectionRelatorios" class="section">
+  <h2>📑 Relatórios</h2>
+  <select>
+    <option>Diário</option>
+    <option>Mensal</option>
+    <option>Anual</option>
+  </select>
+  <button class="action">Gerar</button>
+  <textarea></textarea>
+</div>
+
+<div id="sectionCobrancas" class="section">
+  <h2>💰 Criar Cobrança</h2>
+  <input placeholder="Nome do cliente">
+  <input type="number" step="0.01" placeholder="Valor">
+  <input placeholder="Descrição">
+  <button class="action">Gerar PIX</button>
+  <button class="action">Gerar Boleto</button>
+</div>
+
+<div id="sectionCRM" class="section">
+  <h2>📊 CRM</h2>
+  <iframe src="/crm.html"></iframe>
+</div>
+
+<script>
+/**
+ * =====================================================
+ * PROTEÇÃO DO DASHBOARD
+ * =====================================================
+ */
+(async function protectDashboard() {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    window.location.href = "/";
+    return;
+  }
+
+  try {
+    const res = await fetch("/subscription/status", {
+      headers: {
+        Authorization: "Bearer " + token
+      }
+    });
+
+    const data = await res.json();
+
+    if (data.subscription_status !== "active") {
+      window.location.href = "/payment";
+    }
+  } catch {
+    window.location.href = "/";
+  }
+})();
+
+/**
+ * =====================================================
+ * MENU
+ * =====================================================
+ */
+function showSection(name) {
+  document.querySelectorAll(".section").forEach(s => s.style.display = "none");
+  document.getElementById("section" + name).style.display = "block";
+}
+
+// abre chat por padrão
+showSection("Chat");
+
+/**
+ * =====================================================
+ * LOGOUT
+ * =====================================================
+ */
+function logout() {
+  localStorage.removeItem("token");
+  window.location.href = "/";
+}
+</script>
+
+</body>
+</html>

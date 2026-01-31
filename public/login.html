@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AdminIA — Login</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+
+  <div class="container">
+
+    <h2>AdminIA — Login</h2>
+
+    <!-- LOGIN -->
+    <form id="loginForm">
+      <label for="email">E-mail</label>
+      <input type="email" id="email" required>
+
+      <label for="password">Senha</label>
+      <input type="password" id="password" required>
+
+      <button type="submit" id="loginBtn">Entrar</button>
+    </form>
+
+    <p id="msg" style="margin-top:10px; color: red;"></p>
+
+    <hr>
+
+    <!-- REGISTRO -->
+    <h3>Criar Conta</h3>
+
+    <form id="registerForm">
+      <label for="regEmail">E-mail</label>
+      <input type="email" id="regEmail" required>
+
+      <label for="regPassword">Senha</label>
+      <input type="password" id="regPassword" required>
+
+      <button type="submit" id="registerBtn">Criar Conta</button>
+    </form>
+
+    <p id="regMsg" style="margin-top:10px; color: green;"></p>
+
+  </div>
+
+  <!-- JS DO LOGIN/REGISTRO -->
+  <script src="/js/login.js"></script>
+
+</body>
+</html>

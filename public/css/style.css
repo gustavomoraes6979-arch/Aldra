@@ -1,0 +1,179 @@
+/* =========================================================
+   ALDRA — Premium Corporate UI 2025
+   Design limpo, moderno, elegante e altamente profissional
+   ========================================================= */
+
+/* ---------- PALETA ALDRA ---------- */
+:root{
+    --azul-principal: #0A6CBD;
+    --azul-escuro: #053F6B;
+    --verde: #3BB273;
+    --cinza-bg: #F4F7FA;
+    --cinza-borda: #DCE2E8;
+    --cinza-texto: #4A5568;
+    --white: #FFFFFF;
+
+    --radius: 12px;
+    --shadow: 0 6px 18px rgba(0,0,0,0.06);
+}
+
+/* ---------- GLOBAL ---------- */
+*{
+    box-sizing: border-box;
+}
+
+body{
+    margin: 0;
+    font-family: "Inter", Arial, sans-serif;
+    background: var(--cinza-bg);
+    color: #1a1d24;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+}
+
+/* ---------- HEADER ---------- */
+header{
+    background: var(--azul-escuro);
+    color: var(--white);
+    height: 74px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+header img{
+    height: 40px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
+}
+
+/* ---------- MENU SUPERIOR ---------- */
+.menu{
+    display: flex;
+    gap: 12px;
+    padding: 14px 20px;
+    background: var(--white);
+    border-bottom: 1px solid var(--cinza-borda);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    overflow-x: auto;
+}
+
+.menu button{
+    padding: 10px 20px;
+    background: var(--azul-principal);
+    color: var(--white);
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 15px;
+    white-space: nowrap;
+    transition: 0.18s ease;
+    box-shadow: 0 3px 10px rgba(10,108,189,0.18);
+}
+
+.menu button:hover{
+    background: var(--azul-escuro);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(10,108,189,0.26);
+}
+
+/* ---------- SEÇÕES ---------- */
+.section{
+    display: none;
+    background: var(--white);
+    margin: 30px auto;
+    padding: 26px;
+    max-width: 900px;
+    border-radius: var(--radius);
+    border: 1px solid var(--cinza-borda);
+    box-shadow: var(--shadow);
+    animation: fade 0.3s ease;
+}
+
+@keyframes fade{
+    from{ opacity: 0; transform: translateY(6px); }
+    to{ opacity: 1; transform: translateY(0); }
+}
+
+.section h2{
+    margin-top: 0;
+    font-size: 22px;
+    color: var(--azul-escuro);
+    font-weight: 700;
+}
+
+/* ---------- INPUTS & TEXTAREAS ---------- */
+input,
+textarea,
+select{
+    width: 100%;
+    padding: 14px;
+    margin-top: 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--cinza-borda);
+    background: #ffffff;
+    font-size: 15px;
+    color: #1a1d24;
+    transition: 0.18s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus{
+    border-color: var(--azul-principal);
+    box-shadow: 0 0 0 3px rgba(10,108,189,0.18);
+    outline: none;
+}
+
+textarea{
+    min-height: 160px;
+    resize: vertical;
+}
+
+/* ---------- BOTÕES DE AÇÃO ---------- */
+button.action{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 20px;
+    background: var(--verde);
+    color: var(--white);
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    margin-top: 14px;
+    transition: 0.18s ease;
+    box-shadow: 0 4px 12px rgba(59,178,115,0.22);
+}
+
+button.action:hover{
+    background: #2f8f5c;
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(59,178,115,0.28);
+}
+
+/* ---------- RESULTADOS ---------- */
+#cobrResultado{
+    margin-top: 18px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--azul-escuro);
+}
+
+/* ---------- MOBILE ---------- */
+@media(max-width: 720px){
+    .section{
+        margin: 20px 14px;
+        padding: 20px;
+    }
+    header{
+        font-size: 20px;
+    }
+}

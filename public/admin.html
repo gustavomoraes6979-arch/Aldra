@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Aldra — Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f7fa;
+      padding: 30px;
+    }
+
+    h1 {
+      margin-bottom: 6px;
+    }
+
+    p {
+      color: #444;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .card {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 5px 20px rgba(0,0,0,.05);
+      text-align: center;
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 28px;
+      color: #0A6CBD;
+    }
+
+    table {
+      width: 100%;
+      background: #fff;
+      border-collapse: collapse;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 20px;
+    }
+
+    th, td {
+      padding: 14px;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+    }
+
+    th {
+      background: #0A6CBD;
+      color: #fff;
+    }
+
+    .status-active { color: green; font-weight: bold; }
+    .status-pending { color: #e69500; font-weight: bold; }
+    .status-blocked { color: red; font-weight: bold; }
+
+    button {
+      padding: 6px 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button.blocked,
+    button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+
+    .btn {
+      background: #0A6CBD;
+      color: #fff;
+    }
+
+    .btn-danger {
+      background: #c0392b;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🛠️ Admin — Aldra</h1>
+  <p>Painel administrativo geral</p>
+
+  <div class="stats">
+    <div class="card">
+      <p>Total</p>
+      <h2 id="totalUsers">0</h2>
+    </div>
+    <div class="card">
+      <p>Ativos</p>
+      <h2 id="activeUsers">0</h2>
+    </div>
+    <div class="card">
+      <p>Pendentes</p>
+      <h2 id="pendingUsers">0</h2>
+    </div>
+    <div class="card">
+      <p>Bloqueados</p>
+      <h2 id="blockedUsers">0</h2>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nome</th>
+        <th>Email</th>
+        <th>Status</th>
+        <th>Expira</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody id="usersBody"></tbody>
+  </table>
+
+  <script src="/admin.js"></script>
+</body>
+</html>

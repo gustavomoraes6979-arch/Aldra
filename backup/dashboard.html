@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AdminIA — Dashboard</title>
+
+  <link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body>
+
+  <!-- BLOQUEIO SE NÃO TIVER TOKEN -->
+  <script>
+    const token = localStorage.getItem("adminia_token");
+    if (!token) {
+      window.location.href = "/login"; // REDIRECIONA PARA LOGIN
+    }
+  </script>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="brand">
+      <div class="logo">AI</div>
+      <h1>AdminIA</h1>
+    </div>
+
+    <div class="user">
+      <div class="name" id="headerUser">Usuário</div>
+      <button id="headerLogout" class="btn btn-ghost">Sair</button>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="app container-wide fade-in" id="dashboardContent" style="display:none;">
+
+    <h2 style="margin-bottom:16px;">Dashboard Administrativo</h2>
+
+    <!-- AVISO DE VENCIMENTO -->
+    <div id="subscriptionWarning"
+         class="card"
+         style="background:#fff8e1; border-left:4px solid #f4b400; display:none; margin-bottom:18px;">
+      <p style="margin:0; font-weight:600;" id="subscriptionText"></p>
+    </div>
+
+    <div class="grid cols-2" style="align-items:start; gap:24px;">
+
+      <!-- COLUNA ESQUERDA -->
+      <div class="col">
+
+        <!-- UPLOAD PDF -->
+        <div class="card">
+          <h2>Enviar PDF</h2>
+          <p class="help">O AdminIA extrai texto, identifica riscos, detecta dados e analisa o conteúdo automaticamente.</p>
+
+          <form id="uploadForm" class="col" style="margin-top:10px;">
+            <input type="file" id="fileInput" accept="application/pdf" />
+            <button type="submit" class="btn btn-primary" style="margin-top:8px;">
+              Enviar e Analisar
+            </button>
+          </form>
+
+          <p id="uploadStatus" class="help" style="margin-top:10px;"></p>
+        </div>
+
+        <!-- COLAR TEXTO -->
+        <div class="card fade-in">
+          <h2>Análise de Texto</h2>
+          <p class="help">Cole o texto de um documento, contrato ou cláusula para análise automática.</p>
+
+          <textarea id="manualText" placeholder="Cole o texto aqui"></textarea>
+
+          <div class="row" style="margin-top:10px;">
+            <button id="sendTextBtn" class="btn btn-primary" style="flex:1;">Analisar texto</button>
+            <button id="clearText" class="btn btn-ghost" style="flex:1;">Limpar</button>
+          </div>
+
+          <p id="textStatus" class="help" style="margin-top:10px;"></p>
+        </div>
+
+        <!-- RESULTADO -->
+        <div class="card fade-in">
+          <h2>Resultado da Análise</h2>
+
+          <h3>Texto extraído</h3>
+          <pre id="extractedText">Nenhuma análise feita ainda.</pre>
+
+          <h3>Dados detectados</h3>
+          <pre id="keyData">-</pre>
+
+          <h3>IA — Riscos, Alertas e Sugestões</h3>
+          <pre id="aiResult">-</pre>
+        </div>
+      </div>
+
+      <!-- COLUNA DIREITA -->
+      <div class="col">
+
+        <!-- CONTA -->
+        <div class="card fade-in">
+          <h2>Conta</h2>
+          <p class="help">Nome: <strong id="accountName">—</strong></p>
+          <p class="help">E-mail: <strong id="accountEmail">—</strong></p>
+          <p class="help">Status da conta: 
+            <strong id="accountStatus" style="color:var(--danger)">Inativa</strong>
+          </p>
+        </div>
+
+        <!-- CONTRATOS -->
+        <div class="card fade-in">
+          <h2>Gerar Contrato (IA)</h2>
+          <p class="help">Preencha os dados e gere automaticamente um contrato formal.</p>
+
+          <label class="help">Tipo de contrato</label>
+          <input id="contractType" placeholder="Ex: Prestação de Serviços">
+
+          <label class="help" style="margin-top:12px;">Nome da empresa contratante</label>
+          <input id="companyName" placeholder="Ex: AdminIA LTDA">
+
+          <label class="help" style="margin-top:12px;">Nome do cliente / contratado</label>
+          <input id="clientName" placeholder="Ex: João Silva">
+
+          <label class="help" style="margin-top:12px;">Informações adicionais (opcional)</label>
+          <textarea id="extraInfo" placeholder="Detalhes adicionais..."></textarea>
+
+          <button id="generateContractBtn" 
+                  class="btn btn-primary" 
+                  style="margin-top:14px; width:100%;">Gerar contrato</button>
+
+          <p id="contractStatus" class="help" style="margin-top:10px;"></p>
+
+          <h3 style="margin-top:20px;">Contrato gerado:</h3>
+          <pre id="contractOutput" style="white-space:pre-wrap; max-height:300px; overflow:auto;">
+Nenhum contrato gerado ainda.</pre>
+        </div>
+
+        <!-- COBRANÇA PIX/BOLETO -->
+        <div class="card fade-in">
+          <h2>Emitir Cobrança</h2>
+
+          <label class="help">Nome do cliente</label>
+          <input id="billClientName">
+
+          <label class="help" style="margin-top:12px;">E-mail</label>
+          <input id="billClientEmail">
+
+          <label class="help" style="margin-top:12px;">CPF/CNPJ</label>
+          <input id="billDocument">
+
+          <div style="margin-top:12px; padding:10px; border:1px dashed var(--muted); border-radius:6px;">
+            <h4 style="margin:0 0 8px 0;">Endereço (boleto)</h4>
+
+            <label class="help" style="margin-top:6px;">CEP</label>
+            <input id="billZip">
+
+            <label class="help" style="margin-top:6px;">Rua</label>
+            <input id="billStreet">
+
+            <label class="help" style="margin-top:6px;">Número</label>
+            <input id="billNumber">
+
+            <label class="help" style="margin-top:6px;">Bairro</label>
+            <input id="billNeighborhood">
+
+            <label class="help" style="margin-top:6px;">Cidade</label>
+            <input id="billCity">
+
+            <label class="help" style="margin-top:6px;">Estado (UF)</label>
+            <input id="billState">
+          </div>
+
+          <label class="help" style="margin-top:12px;">Valor (R$)</label>
+          <input id="billValue">
+
+          <label class="help" style="margin-top:12px;">Descrição</label>
+          <input id="billDescription">
+
+          <div class="row" style="margin-top:14px; gap:10px;">
+            <button id="generatePixBtn" class="btn btn-primary" style="flex:1;">Gerar PIX</button>
+            <button id="generateBoletoBtn" class="btn btn-secondary" style="flex:1;">Gerar Boleto</button>
+          </div>
+
+          <p id="billingStatus" class="help" style="margin-top:10px;"></p>
+
+          <div id="billingResult" style="margin-top:16px; display:none;">
+            <h3>Resultado da Cobrança</h3>
+
+            <div id="pixArea" style="display:none;">
+              <p class="help">PIX Copia e Cola:</p>
+              <pre id="pixCopy"></pre>
+              <p class="help">QR Code:</p>
+              <img id="pixQr" style="max-width:260px; border:1px solid #ddd; border-radius:8px;" />
+            </div>
+
+            <div id="boletoArea" style="display:none; margin-top:16px;">
+              <p class="help">Boleto:</p>
+              <a id="boletoLink" href="#" target="_blank" class="btn btn-ghost">Abrir boleto</a>
+
+              <p class="help" style="margin-top:12px;">Linha digitável:</p>
+              <pre id="boletoCode"></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- GUIA -->
+        <div class="card fade-in">
+          <h2>Guia rápida</h2>
+          <ul style="margin:0; padding-left:20px; color:var(--muted); line-height:1.6;">
+            <li>Envie um PDF para análise completa.</li>
+            <li>Cole texto para análise rápida.</li>
+            <li>Gere contratos automaticamente.</li>
+            <li>Emita PIX ou Boleto.</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/main.js"></script>
+
+  <!-- LÓGICA DO DASHBOARD -->
+  <script>
+
+    /* =========================================================
+       1) VERIFICAR ASSINATURA AO ENTRAR NO DASHBOARD
+    ========================================================= */
+    async function checkActivation() {
+      const token = localStorage.getItem("adminia_token");
+      let user = JSON.parse(localStorage.getItem("adminia_user") || "{}");
+
+      if (!token || !user.id) {
+        return (window.location.href = "/login");
+      }
+
+      // SINCRONIZAR USUÁRIO COM BACKEND
+      const resUser = await fetch("/users/me", {
+        headers: { Authorization: "Bearer " + token }
+      });
+
+      if (!resUser.ok) {
+        localStorage.clear();
+        return (window.location.href = "/login");
+      }
+
+      const jUser = await resUser.json();
+      user = jUser.user;
+      localStorage.setItem("adminia_user", JSON.stringify(user));
+
+      // STATUS DA ASSINATURA
+      const res = await fetch(`/activation/status/${user.id}`, {
+        headers: { Authorization: "Bearer " + token }
+      });
+
+      const j = await res.json();
+
+      if (!j.active) {
+        document.body.innerHTML = `
+          <div style="padding:40px; text-align:center;">
+            <h2>Sua assinatura expirou ou não está ativa</h2>
+            <p>Finalize a ativação via PIX para acessar o painel.</p>
+            <a href="/ativar" class="btn btn-primary" style="margin-top:20px;">Ativar Agora</a>
+          </div>
+        `;
+        return;
+      }
+
+      // liberar dashboard
+      dashboardContent.style.display = "block";
+      accountStatus.innerText = "Ativa";
+      accountStatus.style.color = "green";
+
+      headerUser.innerText = user.name;
+      accountName.innerText = user.name;
+      accountEmail.innerText = user.email;
+
+      // aviso de vencimento
+      if (j.subscription_expires) {
+        const exp = new Date(j.subscription_expires);
+        const now = new Date();
+        const diff = exp - now;
+        const days = Math.ceil(diff / 86400000);
+
+        if (days <= 10) {
+          subscriptionWarning.style.display = "block";
+          subscriptionText.innerText = `⚠ Sua assinatura vence em ${days} dias.`;
+        }
+      }
+    }
+
+    checkActivation();
+
+
+    /* =========================================================
+       2) LOGOUT
+    ========================================================= */
+    headerLogout.addEventListener("click", () => {
+      localStorage.clear();
+      window.location.href = "/login";
+    });
+
+
+    /* =========================================================
+       3) PDF → IA
+    ========================================================= */
+    uploadForm.addEventListener("submit", async e => {
+      e.preventDefault();
+      const file = fileInput.files[0];
+      if (!file) return alert("Selecione um PDF.");
+
+      uploadStatus.innerText = "Processando...";
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const res = await fetch("/pdf/analyze", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + localStorage.getItem("adminia_token") },
+          body: formData
+        });
+
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error);
+
+        uploadStatus.innerText = "✅ PDF analisado!";
+        extractedText.textContent = j.extractedText;
+        keyData.textContent = JSON.stringify(j.keyData, null, 2);
+        aiResult.textContent = JSON.stringify(j.aiResult, null, 2);
+
+      } catch (err) {
+        uploadStatus.innerText = "❌ " + err.message;
+      }
+    });
+
+
+    /* =========================================================
+       4) TEXTO MANUAL → IA
+    ========================================================= */
+    sendTextBtn.addEventListener("click", async () => {
+      const text = manualText.value.trim();
+      if (!text) return;
+
+      textStatus.innerText = "Analisando...";
+
+      try {
+        const res = await fetch("/ai/analyze", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + localStorage.getItem("adminia_token")
+          },
+          body: JSON.stringify({ text })
+        });
+
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error);
+
+        textStatus.innerText = "✅ Concluído!";
+        aiResult.textContent = JSON.stringify(j.aiResult, null, 2);
+
+      } catch (err) {
+        textStatus.innerText = "❌ " + err.message;
+      }
+    });
+
+    clearText.addEventListener("click", () => {
+      manualText.value = "";
+      aiResult.textContent = "-";
+      textStatus.innerText = "";
+    });
+
+
+    /* =========================================================
+       5) GERAR CONTRATO (IA)
+    ========================================================= */
+    generateContractBtn.addEventListener("click", async () => {
+      const contractTypeValue = contractType.value.trim();
+      const companyNameValue = companyName.value.trim();
+      const clientNameValue = clientName.value.trim();
+      const extraInfoValue = extraInfo.value.trim();
+
+      if (!contractTypeValue || !companyNameValue || !clientNameValue)
+        return (contractStatus.innerText = "❌ Preencha tudo.");
+
+      contractStatus.innerText = "Gerando...";
+
+      try {
+        const res = await fetch("/contracts/create", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + localStorage.getItem("adminia_token")
+          },
+          body: JSON.stringify({
+            contractType: contractTypeValue,
+            companyName: companyNameValue,
+            clientName: clientNameValue,
+            extraInfo: extraInfoValue
+          })
+        });
+
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error);
+
+        contractStatus.innerText = "✅ Contrato gerado!";
+        contractOutput.textContent = j.contract;
+
+      } catch (err) {
+        contractStatus.innerText = "❌ " + err.message;
+      }
+    });
+
+
+    /* =========================================================
+       6) GERAR PIX
+    ========================================================= */
+    generatePixBtn.addEventListener("click", async () => {
+      const name = billClientName.value.trim();
+      const email = billClientEmail.value.trim();
+      const value = billValue.value.trim();
+
+      if (!name || !email || !value) {
+        billingStatus.innerText = "❌ Preencha todos os campos.";
+        return;
+      }
+
+      billingStatus.innerText = "Gerando PIX...";
+
+      try {
+        const res = await fetch("/billing/pix", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + localStorage.getItem("adminia_token")
+          },
+          body: JSON.stringify({ name, email, value })
+        });
+
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error);
+
+        billingStatus.innerText = "✅ PIX criado!";
+        billingResult.style.display = "block";
+
+        pixArea.style.display = "block";
+        boletoArea.style.display = "none";
+
+        pixCopy.innerText = j.copy_paste || j.copiar_cola;
+        pixQr.src = `data:image/png;base64,${j.qr_code_base64}`;
+
+      } catch (err) {
+        billingStatus.innerText = "❌ " + err.message;
+      }
+    });
+
+
+    /* =========================================================
+       7) GERAR BOLETO
+    ========================================================= */
+    generateBoletoBtn.addEventListener("click", async () => {
+      const name = billClientName.value.trim();
+      const email = billClientEmail.value.trim();
+      const document = billDocument.value.trim();
+      const value = billValue.value.trim();
+      const description = billDescription.value.trim();
+
+      const zip_code = billZip.value.trim();
+      const street = billStreet.value.trim();
+      const number = billNumber.value.trim();
+      const neighborhood = billNeighborhood.value.trim();
+      const city = billCity.value.trim();
+      const state = billState.value.trim();
+
+      if (!name || !email || !document || !value || !description ||
+          !zip_code || !street || !number || !neighborhood || !city || !state) {
+        billingStatus.innerText = "❌ Preencha todos os campos.";
+        return;
+      }
+
+      billingStatus.innerText = "Gerando boleto...";
+
+      try {
+        const res = await fetch("/billing/boleto", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + localStorage.getItem("adminia_token")
+          },
+          body: JSON.stringify({
+            name, email, value, document,
+            zip_code, street, number, neighborhood, city, state
+          })
+        });
+
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error);
+
+        billingStatus.innerText = "✅ Boleto criado!";
+        billingResult.style.display = "block";
+
+        boletoArea.style.display = "block";
+        pixArea.style.display = "none";
+
+        boletoLink.href = j.boleto_url;
+        boletoCode.innerText = j.barcode || "—";
+
+      } catch (err) {
+        billingStatus.innerText = "❌ " + err.message;
+      }
+    });
+
+  </script>
+
+</body>
+</html>

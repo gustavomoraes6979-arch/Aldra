@@ -1,0 +1,11 @@
+{
+  "extractedText": "Teste de OCR - AdminlA\r\nEste é um documento de teste para validar a extração de texto via Tesseract_js_\r\nInclui algumas linhas de texto para simular um contrato ou nota fiscal.\r\n",
+  "keyData": {
+    "cnpjs": [],
+    "dates": [],
+    "values": []
+  },
+  "aiResult": {
+    "error": "Não foi possível analisar o documento"
+  }
+}

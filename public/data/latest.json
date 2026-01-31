@@ -1,0 +1,22 @@
+{
+  "extractedText": "Texto teste",
+  "keyData": {
+    "cnpjs": [],
+    "dates": [],
+    "values": []
+  },
+  "aiResult": {
+    "resumo": "Análise automática do documento.",
+    "itens_importantes": [],
+    "riscos": [],
+    "alertas": [],
+    "oportunidades": [],
+    "recomendacoes": [],
+    "erros_encontrados": [],
+    "raw": {
+      "risks": [],
+      "alerts": [],
+      "suggestions": []
+    }
+  }
+}

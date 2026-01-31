@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AdminIA — Ativar Assinatura</title>
+
+  <link rel="stylesheet" href="/css/style.css">
+
+  <style>
+    .qr-box {
+      background: #f3f3f3;
+      padding: 12px;
+      border-radius: 6px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h2>Ativar Assinatura</h2>
+
+    <p>Valor da assinatura: <strong>R$ 19,90</strong></p>
+
+    <button id="gerarPix">Gerar QR Code PIX</button>
+
+    <div id="pixArea" style="display: none; margin-top: 20px;">
+      <h3>Escaneie o QR Code PIX:</h3>
+      <pre id="qrText" class="qr-box"></pre>
+
+      <button id="confirmarPagamento" style="margin-top: 15px;">
+        Já paguei
+      </button>
+    </div>
+
+    <p id="msg" style="margin-top: 20px;"></p>
+
+    <hr style="margin-top: 30px;">
+    <button onclick="voltarLogin()" style="margin-top: 10px;">Voltar ao Login</button>
+  </div>
+
+  <script>
+    function voltarLogin() {
+      window.location.href = "/login";
+    }
+  </script>
+
+  <script src="/ativar.js"></script>
+</body>
+
+</html>

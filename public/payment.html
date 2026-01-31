@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Aldra — Assinatura</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f4f7fa;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .card {
+      background: #ffffff;
+      max-width: 420px;
+      width: 100%;
+      padding: 30px;
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      text-align: center;
+    }
+
+    .price {
+      font-size: 32px;
+      font-weight: bold;
+      color: #0A6CBD;
+      margin: 20px 0;
+    }
+
+    #qrcode {
+      margin: 20px auto;
+      display: flex;
+      justify-content: center;
+    }
+
+    .pix-box {
+      background: #eef4ff;
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 15px;
+      font-size: 13px;
+      word-break: break-all;
+    }
+
+    .status {
+      margin-top: 18px;
+      font-weight: bold;
+      color: #0A6CBD;
+    }
+
+    .alert {
+      margin-top: 15px;
+      font-size: 14px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h1>🔐 Assinatura Aldra</h1>
+  <p>Ative sua assinatura mensal</p>
+
+  <div class="price">R$ 70,00 / mês</div>
+
+  <div id="qrcode"></div>
+
+  <div class="pix-box" id="pixCode"></div>
+
+  <div class="status" id="statusMsg">
+    ⏳ Aguardando pagamento
+  </div>
+
+  <div class="alert">
+    Após o pagamento, a liberação ocorre automaticamente.
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+<script>
+const PIX_CPF = "46204755803";
+const PIX_TEXT = `
+PIX - Aldra Assinatura
+CPF: ${PIX_CPF}
+Valor: R$ 70,00
+Descrição: Assinatura Aldra
+`.trim();
+
+function gerarPix() {
+  document.getElementById("pixCode").innerText = PIX_TEXT;
+
+  new QRCode(document.getElementById("qrcode"), {
+    text: PIX_TEXT,
+    width: 220,
+    height: 220
+  });
+}
+
+async function verificarStatus() {
+  const token = localStorage.getItem("token");
+  if (!token) return;
+
+  const res = await fetch("/subscription/status", {
+    headers: {
+      Authorization: "Bearer " + token
+    }
+  });
+
+  const data = await res.json();
+
+  if (data.subscription_status === "active") {
+    document.getElementById("statusMsg").innerText =
+      "✅ Pagamento confirmado!";
+    setTimeout(() => location.href = "/dashboard", 1500);
+  }
+
+  if (data.subscription_status === "blocked") {
+    document.getElementById("statusMsg").innerText =
+      "⛔ Assinatura bloqueada";
+  }
+}
+
+gerarPix();
+setInterval(verificarStatus, 5000);
+</script>
+
+</body>
+</html>
