@@ -85,6 +85,17 @@
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
 <script>
+/* ======================================================
+   SEGURANÇA BÁSICA
+====================================================== */
+const token = localStorage.getItem("token");
+if (!token) {
+  window.location.href = "/";
+}
+
+/* ======================================================
+   PIX VISUAL
+====================================================== */
 const PIX_CPF = "46204755803";
 const PIX_TEXT = `
 PIX - Aldra Assinatura
@@ -103,27 +114,39 @@ function gerarPix() {
   });
 }
 
+/* ======================================================
+   VERIFICAÇÃO DE ASSINATURA (SAFE)
+====================================================== */
 async function verificarStatus() {
-  const token = localStorage.getItem("token");
-  if (!token) return;
+  try {
+    const res = await fetch("/subscription/status", {
+      headers: {
+        Authorization: "Bearer " + token
+      }
+    });
 
-  const res = await fetch("/subscription/status", {
-    headers: {
-      Authorization: "Bearer " + token
+    if (!res.ok) return;
+
+    const text = await res.text();
+
+    // proteção contra HTML inesperado
+    if (text.startsWith("<")) return;
+
+    const data = JSON.parse(text);
+
+    if (data.subscription_status === "active") {
+      document.getElementById("statusMsg").innerText =
+        "✅ Pagamento confirmado!";
+      setTimeout(() => location.href = "/dashboard", 1500);
     }
-  });
 
-  const data = await res.json();
+    if (data.subscription_status === "blocked") {
+      document.getElementById("statusMsg").innerText =
+        "⛔ Assinatura bloqueada";
+    }
 
-  if (data.subscription_status === "active") {
-    document.getElementById("statusMsg").innerText =
-      "✅ Pagamento confirmado!";
-    setTimeout(() => location.href = "/dashboard", 1500);
-  }
-
-  if (data.subscription_status === "blocked") {
-    document.getElementById("statusMsg").innerText =
-      "⛔ Assinatura bloqueada";
+  } catch (e) {
+    console.log("Aguardando pagamento...");
   }
 }
 

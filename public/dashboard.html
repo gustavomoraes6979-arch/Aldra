@@ -185,57 +185,54 @@
 </div>
 
 <script>
-/**
- * =====================================================
- * PROTEÇÃO DO DASHBOARD
- * =====================================================
- */
+/* =====================================================
+   PROTEÇÃO ROBUSTA DO DASHBOARD
+===================================================== */
 (async function protectDashboard() {
   const token = localStorage.getItem("token");
 
   if (!token) {
-    window.location.href = "/";
+    location.href = "/";
     return;
   }
 
   try {
     const res = await fetch("/subscription/status", {
-      headers: {
-        Authorization: "Bearer " + token
-      }
+      headers: { Authorization: "Bearer " + token }
     });
 
-    const data = await res.json();
+    if (!res.ok) throw new Error();
+
+    const text = await res.text();
+    if (text.startsWith("<")) throw new Error();
+
+    const data = JSON.parse(text);
 
     if (data.subscription_status !== "active") {
-      window.location.href = "/payment";
+      location.href = "/payment";
     }
   } catch {
-    window.location.href = "/";
+    location.href = "/";
   }
 })();
 
-/**
- * =====================================================
- * MENU
- * =====================================================
- */
+/* =====================================================
+   MENU
+===================================================== */
 function showSection(name) {
-  document.querySelectorAll(".section").forEach(s => s.style.display = "none");
+  document.querySelectorAll(".section")
+    .forEach(s => s.style.display = "none");
   document.getElementById("section" + name).style.display = "block";
 }
 
-// abre chat por padrão
 showSection("Chat");
 
-/**
- * =====================================================
- * LOGOUT
- * =====================================================
- */
+/* =====================================================
+   LOGOUT
+===================================================== */
 function logout() {
   localStorage.removeItem("token");
-  window.location.href = "/";
+  location.href = "/";
 }
 </script>
 
