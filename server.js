@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (RENDER FINAL — SEM TELA BRANCA)
+// Aldra — server.js (RENDER FINAL — FUNCIONAL)
 // =======================================================================
 
 import express from "express";
@@ -14,7 +14,15 @@ import { fileURLToPath } from "url";
 dotenv.config();
 
 // =======================================================================
-// PATHS (OBRIGATÓRIO PARA RENDER)
+// VALIDAÇÃO CRÍTICA
+// =======================================================================
+if (!process.env.JWT_SECRET) {
+  console.error("❌ JWT_SECRET não definido no Render");
+  process.exit(1);
+}
+
+// =======================================================================
+// PATHS
 // =======================================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,7 +39,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 👉 SERVE O FRONTEND
+// FRONTEND
 app.use(express.static(PUBLIC_DIR));
 
 // =======================================================================
@@ -65,7 +73,7 @@ db.run(`
 `);
 
 // =======================================================================
-// AUTH
+// AUTH MIDDLEWARE
 // =======================================================================
 function auth(req, res, next) {
   const header = req.headers.authorization;
@@ -97,6 +105,9 @@ function adminAuth(req, res, next) {
 // =======================================================================
 app.post("/auth/register", (req, res) => {
   const { name, email, password } = req.body;
+  if (!email || !password)
+    return res.status(400).json({ error: "Dados inválidos" });
+
   const hash = bcrypt.hashSync(password, 10);
 
   db.run(
@@ -140,7 +151,6 @@ app.get("/subscription/status", auth, (req, res) => {
     (_, user) => {
       if (!user)
         return res.json({ subscription_status: "none" });
-
       res.json(user);
     }
   );
@@ -165,10 +175,9 @@ app.get("/admin/users", adminAuth, (_, res) => {
 });
 
 // =======================================================================
-// 🔥 FALLBACK FINAL (ISSO ARRUMA TUDO)
+// 🔥 FALLBACK CORRETO (SÓ FRONTEND)
 // =======================================================================
-// QUALQUER ROTA QUE NÃO FOR API → INDEX.HTML
-app.get("*", (_, res) => {
+app.get(/^\/(?!auth|api|admin|subscription|health).*/, (_, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
