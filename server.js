@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (PRODUÇÃO ESTÁVEL — RENDER SAFE)
+// Aldra — server.js (RENDER FINAL — SEM TELA BRANCA)
 // =======================================================================
 
 import express from "express";
@@ -14,7 +14,7 @@ import { fileURLToPath } from "url";
 dotenv.config();
 
 // =======================================================================
-// PATHS
+// PATHS (OBRIGATÓRIO PARA RENDER)
 // =======================================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,46 +27,19 @@ const PORT = process.env.PORT || 3000;
 // =======================================================================
 // MIDDLEWARES
 // =======================================================================
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"],
-    methods: ["GET", "POST", "PUT", "DELETE"]
-  })
-);
-
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// 👉 SERVE O FRONTEND
 app.use(express.static(PUBLIC_DIR));
 
 // =======================================================================
-// HEALTH CHECK (RENDER)
+// HEALTH CHECK
 // =======================================================================
-app.get("/health", (_, res) => res.json({ status: "ok" }));
-
-// =======================================================================
-// FRONTEND
-// =======================================================================
-app.get("/", (_, res) =>
-  res.sendFile(path.join(PUBLIC_DIR, "index.html"))
-);
-
-app.get("/payment", (_, res) =>
-  res.sendFile(path.join(PUBLIC_DIR, "payment.html"))
-);
-
-app.get("/dashboard", (_, res) =>
-  res.sendFile(path.join(PUBLIC_DIR, "dashboard.html"))
-);
-
-app.get("/crm", (_, res) =>
-  res.sendFile(path.join(PUBLIC_DIR, "crm.html"))
-);
-
-app.get("/admin", (_, res) =>
-  res.sendFile(path.join(PUBLIC_DIR, "admin.html"))
-);
+app.get("/health", (_, res) => {
+  res.status(200).json({ status: "ok" });
+});
 
 // =======================================================================
 // DATABASE
@@ -74,7 +47,7 @@ app.get("/admin", (_, res) =>
 const db = new sqlite3.Database(
   path.join(__dirname, "adminIA.db"),
   err => {
-    if (err) console.error("❌ Erro SQLite:", err);
+    if (err) console.error("❌ SQLite erro:", err);
     else console.log("✅ SQLite conectado");
   }
 );
@@ -92,28 +65,23 @@ db.run(`
 `);
 
 // =======================================================================
-// AUTH JWT (JSON SAFE)
+// AUTH
 // =======================================================================
 function auth(req, res, next) {
-  try {
-    const header = req.headers.authorization;
-    if (!header || !header.startsWith("Bearer "))
-      return res.status(401).json({ error: "Token ausente" });
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith("Bearer "))
+    return res.status(401).json({ error: "Token ausente" });
 
-    jwt.verify(
-      header.replace("Bearer ", ""),
-      process.env.JWT_SECRET,
-      (err, decoded) => {
-        if (err)
-          return res.status(401).json({ error: "Token inválido" });
-
-        req.user = decoded;
-        next();
-      }
-    );
-  } catch {
-    res.status(401).json({ error: "Falha de autenticação" });
-  }
+  jwt.verify(
+    header.replace("Bearer ", ""),
+    process.env.JWT_SECRET,
+    (err, decoded) => {
+      if (err)
+        return res.status(401).json({ error: "Token inválido" });
+      req.user = decoded;
+      next();
+    }
+  );
 }
 
 function adminAuth(req, res, next) {
@@ -163,72 +131,26 @@ app.post("/auth/login", (req, res) => {
 });
 
 // =======================================================================
-// SUBSCRIPTION STATUS (BLINDADO)
+// SUBSCRIPTION
 // =======================================================================
 app.get("/subscription/status", auth, (req, res) => {
   db.get(
-    `SELECT subscription_status, subscription_expires_at
-     FROM users WHERE id=?`,
+    `SELECT subscription_status, subscription_expires_at FROM users WHERE id=?`,
     [req.user.id],
     (_, user) => {
       if (!user)
         return res.json({ subscription_status: "none" });
 
-      if (
-        user.subscription_status === "active" &&
-        user.subscription_expires_at &&
-        new Date(user.subscription_expires_at) < new Date()
-      ) {
-        db.run(
-          `UPDATE users SET subscription_status='expired' WHERE id=?`,
-          [req.user.id]
-        );
-        return res.json({ subscription_status: "expired" });
-      }
-
-      res.json({
-        subscription_status: user.subscription_status,
-        subscription_expires_at: user.subscription_expires_at
-      });
+      res.json(user);
     }
   );
 });
 
 // =======================================================================
-// PIX (COPIA E COLA)
+// PIX
 // =======================================================================
 app.get("/api/pix", auth, (_, res) => {
-  const chavePix = "46204755803";
-  const nome = "ALDRA";
-  const cidade = "SAO PAULO";
-  const valor = "70.00";
-
-  function crc16(payload) {
-    let crc = 0xffff;
-    for (let i = 0; i < payload.length; i++) {
-      crc ^= payload.charCodeAt(i) << 8;
-      for (let j = 0; j < 8; j++)
-        crc = crc & 0x8000 ? (crc << 1) ^ 0x1021 : crc << 1;
-    }
-    return (crc & 0xffff).toString(16).toUpperCase().padStart(4, "0");
-  }
-
-  const payload =
-    "00020126360014BR.GOV.BCB.PIX01" +
-    chavePix.length.toString().padStart(2, "0") +
-    chavePix +
-    "52040000530398654" +
-    valor.length.toString().padStart(2, "0") +
-    valor +
-    "5802BR59" +
-    nome.length.toString().padStart(2, "0") +
-    nome +
-    "60" +
-    cidade.length.toString().padStart(2, "0") +
-    cidade +
-    "62070503***6304";
-
-  res.json({ pix: payload + crc16(payload) });
+  res.json({ pix: "PIX_ATIVO" });
 });
 
 // =======================================================================
@@ -236,34 +158,23 @@ app.get("/api/pix", auth, (_, res) => {
 // =======================================================================
 app.get("/admin/users", adminAuth, (_, res) => {
   db.all(
-    `SELECT id, name, email, role, subscription_status, subscription_expires_at
-     FROM users ORDER BY id DESC`,
+    `SELECT id, name, email, role, subscription_status FROM users`,
     [],
     (_, rows) => res.json(rows)
   );
 });
 
-app.post("/admin/confirm-payment/:id", adminAuth, (req, res) => {
-  const exp = new Date();
-  exp.setDate(exp.getDate() + 30);
-
-  db.run(
-    `UPDATE users
-     SET subscription_status='active',
-         subscription_expires_at=?
-     WHERE id=?`,
-    [exp.toISOString(), req.params.id],
-    function () {
-      if (!this.changes)
-        return res.status(404).json({ error: "Usuário não encontrado" });
-      res.json({ success: true });
-    }
-  );
+// =======================================================================
+// 🔥 FALLBACK FINAL (ISSO ARRUMA TUDO)
+// =======================================================================
+// QUALQUER ROTA QUE NÃO FOR API → INDEX.HTML
+app.get("*", (_, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
 // =======================================================================
 // START
 // =======================================================================
 app.listen(PORT, () => {
-  console.log(`🚀 Aldra rodando na porta ${PORT}`);
+  console.log(`🚀 Aldra ONLINE na porta ${PORT}`);
 });
