@@ -8,7 +8,7 @@
   <style>
     body {
       margin: 0;
-      font-family: Inter, Arial, sans-serif;
+      font-family: Arial, sans-serif;
       background: #f4f7fa;
       display: flex;
       justify-content: center;
@@ -37,4 +37,74 @@
       margin-top: 12px;
       border-radius: 8px;
       border: 1px solid #dce2e8;
-      font-size:
+      font-size: 14px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 16px;
+      border-radius: 8px;
+      border: none;
+      background: #053F6B;
+      color: #fff;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .msg {
+      margin-top: 12px;
+      text-align: center;
+      color: red;
+      font-size: 14px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="box">
+    <h1>Aldra</h1>
+
+    <input id="email" type="email" placeholder="Email" />
+    <input id="password" type="password" placeholder="Senha" />
+
+    <button onclick="login()">Entrar</button>
+
+    <div id="msg" class="msg"></div>
+  </div>
+
+  <script>
+    async function login() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      const msg = document.getElementById("msg");
+
+      msg.innerText = "";
+
+      try {
+        const res = await fetch("/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          msg.innerText = data.error || "Erro ao entrar";
+          return;
+        }
+
+        localStorage.setItem("token", data.token);
+        window.location.href = "/dashboard.html";
+      } catch (err) {
+        msg.innerText = "Erro de conexão com o servidor";
+      }
+    }
+  </script>
+</body>
+</html>
