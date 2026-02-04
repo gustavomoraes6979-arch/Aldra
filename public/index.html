@@ -2,14 +2,14 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Aldra — Login</title>
+  <title>Aldra — Acesso</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <style>
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: #f4f7fa;
+      background: linear-gradient(135deg, #053F6B, #0A66A3);
       display: flex;
       justify-content: center;
       align-items: center;
@@ -20,15 +20,22 @@
       background: #ffffff;
       padding: 32px;
       width: 100%;
-      max-width: 360px;
-      border-radius: 12px;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+      max-width: 380px;
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
     }
 
     h1 {
-      margin-top: 0;
-      color: #053F6B;
+      margin: 0 0 8px;
       text-align: center;
+      color: #053F6B;
+    }
+
+    p {
+      text-align: center;
+      color: #666;
+      margin-bottom: 24px;
+      font-size: 14px;
     }
 
     input {
@@ -43,7 +50,7 @@
     button {
       width: 100%;
       padding: 12px;
-      margin-top: 16px;
+      margin-top: 18px;
       border-radius: 8px;
       border: none;
       background: #053F6B;
@@ -52,15 +59,22 @@
       cursor: pointer;
     }
 
-    button:hover {
-      opacity: 0.9;
+    button.secondary {
+      background: transparent;
+      color: #053F6B;
+      border: 1px solid #053F6B;
+      margin-top: 12px;
     }
 
     .msg {
       margin-top: 12px;
       text-align: center;
-      color: red;
       font-size: 14px;
+      color: red;
+    }
+
+    .hidden {
+      display: none;
     }
   </style>
 </head>
@@ -68,43 +82,95 @@
 <body>
   <div class="box">
     <h1>Aldra</h1>
+    <p id="subtitle">Entre na sua conta</p>
 
+    <input id="name" class="hidden" type="text" placeholder="Seu nome" />
     <input id="email" type="email" placeholder="Email" />
     <input id="password" type="password" placeholder="Senha" />
 
-    <button onclick="login()">Entrar</button>
+    <button id="mainBtn">Entrar</button>
+    <button class="secondary" id="toggleBtn">Criar uma conta</button>
 
     <div id="msg" class="msg"></div>
   </div>
 
   <script>
-    async function login() {
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
-      const msg = document.getElementById("msg");
+    let mode = "login";
 
+    const nameInput = document.getElementById("name");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const msg = document.getElementById("msg");
+    const subtitle = document.getElementById("subtitle");
+    const mainBtn = document.getElementById("mainBtn");
+    const toggleBtn = document.getElementById("toggleBtn");
+
+    toggleBtn.onclick = () => {
       msg.innerText = "";
 
+      if (mode === "login") {
+        mode = "register";
+        nameInput.classList.remove("hidden");
+        subtitle.innerText = "Crie sua conta na Aldra";
+        mainBtn.innerText = "Cadastrar";
+        toggleBtn.innerText = "Já tenho conta";
+      } else {
+        mode = "login";
+        nameInput.classList.add("hidden");
+        subtitle.innerText = "Entre na sua conta";
+        mainBtn.innerText = "Entrar";
+        toggleBtn.innerText = "Criar uma conta";
+      }
+    };
+
+    mainBtn.onclick = async () => {
+      msg.style.color = "red";
+      msg.innerText = "";
+
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      const name = nameInput.value.trim();
+
+      if (!email || !password || (mode === "register" && !name)) {
+        msg.innerText = "Preencha todos os campos";
+        return;
+      }
+
       try {
-        const res = await fetch("/auth/login", {
+        const url =
+          mode === "login" ? "/auth/login" : "/auth/register";
+
+        const body =
+          mode === "login"
+            ? { email, password }
+            : { name, email, password };
+
+        const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify(body)
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-          msg.innerText = data.error || "Erro ao entrar";
+          msg.innerText = data.error || "Erro inesperado";
           return;
         }
 
-        localStorage.setItem("token", data.token);
-        window.location.href = "/dashboard.html";
-      } catch (err) {
-        msg.innerText = "Erro de conexão com o servidor";
+        if (mode === "login") {
+          localStorage.setItem("token", data.token);
+          window.location.href = "/dashboard.html";
+        } else {
+          msg.style.color = "green";
+          msg.innerText = "Conta criada com sucesso! Faça login.";
+          toggleBtn.click();
+        }
+
+      } catch (e) {
+        msg.innerText = "Erro ao conectar com o servidor";
       }
-    }
+    };
   </script>
 </body>
 </html>

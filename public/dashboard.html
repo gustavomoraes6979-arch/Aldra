@@ -20,7 +20,7 @@
     body {
       margin: 0;
       background: var(--cinza-bg);
-      font-family: Inter, Arial, sans-serif;
+      font-family: Arial, sans-serif;
     }
 
     header {
@@ -31,16 +31,6 @@
       justify-content: space-between;
       border-bottom: 1px solid var(--cinza-borda);
       box-shadow: var(--shadow);
-    }
-
-    header .left {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
-    header img {
-      height: 38px;
     }
 
     header h1 {
@@ -57,6 +47,17 @@
       border-radius: var(--radius);
       cursor: pointer;
       font-weight: 600;
+    }
+
+    .alert {
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeeba;
+      margin: 20px;
+      padding: 14px 20px;
+      border-radius: var(--radius);
+      font-weight: 600;
+      display: none;
     }
 
     .menu {
@@ -113,9 +114,10 @@
 
     iframe {
       width: 100%;
-      height: 80vh;
+      height: 70vh;
       border: none;
       border-radius: var(--radius);
+      background: #f0f2f5;
     }
   </style>
 </head>
@@ -123,12 +125,13 @@
 <body>
 
 <header>
-  <div class="left">
-    <img src="/img/logo.png" alt="Aldra">
-    <h1>Aldra — Plataforma Administrativa</h1>
-  </div>
+  <h1>Aldra — Plataforma Administrativa</h1>
   <button onclick="logout()">Sair</button>
 </header>
+
+<div id="alert" class="alert">
+  ⚠️ Sua assinatura ainda não está ativa. Algumas funções podem ficar limitadas.
+</div>
 
 <div class="menu">
   <button onclick="showSection('Pdf')">📄 PDF</button>
@@ -147,7 +150,7 @@
 
 <div id="sectionChat" class="section">
   <h2>💬 Chat Inteligente</h2>
-  <textarea readonly></textarea>
+  <textarea readonly placeholder="Resposta da IA..."></textarea>
   <input placeholder="Digite sua mensagem...">
   <button class="action">Enviar</button>
 </div>
@@ -156,7 +159,7 @@
   <h2>📜 Gerar Contrato</h2>
   <textarea placeholder="Descreva o contrato..."></textarea>
   <button class="action">Gerar Contrato</button>
-  <textarea></textarea>
+  <textarea placeholder="Contrato gerado..."></textarea>
 </div>
 
 <div id="sectionRelatorios" class="section">
@@ -167,7 +170,7 @@
     <option>Anual</option>
   </select>
   <button class="action">Gerar</button>
-  <textarea></textarea>
+  <textarea placeholder="Relatório gerado..."></textarea>
 </div>
 
 <div id="sectionCobrancas" class="section">
@@ -181,16 +184,17 @@
 
 <div id="sectionCRM" class="section">
   <h2>📊 CRM</h2>
-  <iframe src="/crm.html"></iframe>
+  <iframe srcdoc="
+    <h2 style='font-family:Arial;text-align:center;margin-top:40px;color:#666'>
+      CRM em desenvolvimento 🚧
+    </h2>
+  "></iframe>
 </div>
 
 <script>
-/* =====================================================
-   PROTEÇÃO ROBUSTA DO DASHBOARD
-===================================================== */
-(async function protectDashboard() {
+/* ================= PROTEÇÃO ================= */
+(async function () {
   const token = localStorage.getItem("token");
-
   if (!token) {
     location.href = "/";
     return;
@@ -201,35 +205,28 @@
       headers: { Authorization: "Bearer " + token }
     });
 
-    if (!res.ok) throw new Error();
-
-    const text = await res.text();
-    if (text.startsWith("<")) throw new Error();
-
-    const data = JSON.parse(text);
-
+    const data = await res.json();
     if (data.subscription_status !== "active") {
-      location.href = "/payment";
+      document.getElementById("alert").style.display = "block";
     }
   } catch {
     location.href = "/";
   }
 })();
 
-/* =====================================================
-   MENU
-===================================================== */
+/* ================= MENU ================= */
 function showSection(name) {
-  document.querySelectorAll(".section")
-    .forEach(s => s.style.display = "none");
-  document.getElementById("section" + name).style.display = "block";
+  document.querySelectorAll(".section").forEach(
+    s => (s.style.display = "none")
+  );
+
+  const el = document.getElementById("section" + name);
+  if (el) el.style.display = "block";
 }
 
 showSection("Chat");
 
-/* =====================================================
-   LOGOUT
-===================================================== */
+/* ================= LOGOUT ================= */
 function logout() {
   localStorage.removeItem("token");
   location.href = "/";

@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (RENDER FINAL — FUNCIONAL)
+// Aldra — server.js (RENDER FINAL — BLINDADO)
 // =======================================================================
 
 import express from "express";
@@ -17,7 +17,7 @@ dotenv.config();
 // VALIDAÇÃO CRÍTICA
 // =======================================================================
 if (!process.env.JWT_SECRET) {
-  console.error("❌ JWT_SECRET não definido no Render");
+  console.error("❌ JWT_SECRET não definido");
   process.exit(1);
 }
 
@@ -39,53 +39,59 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// FRONTEND
+// FRONTEND (HTML, CSS, JS)
 app.use(express.static(PUBLIC_DIR));
 
 // =======================================================================
 // HEALTH CHECK
 // =======================================================================
 app.get("/health", (_, res) => {
-  res.status(200).json({ status: "ok" });
+  res.json({ status: "ok" });
 });
 
 // =======================================================================
-// DATABASE
+// DATABASE (SQLite — inicialização segura)
 // =======================================================================
-const db = new sqlite3.Database(
-  path.join(__dirname, "adminIA.db"),
-  err => {
-    if (err) console.error("❌ SQLite erro:", err);
-    else console.log("✅ SQLite conectado");
-  }
-);
+const dbPath = path.join(__dirname, "adminIA.db");
 
-db.run(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    email TEXT UNIQUE,
-    password TEXT,
-    role TEXT DEFAULT 'user',
-    subscription_status TEXT DEFAULT 'pending',
-    subscription_expires_at TEXT
-  )
-`);
+const db = new sqlite3.Database(dbPath, err => {
+  if (err) {
+    console.error("❌ Erro SQLite:", err);
+  } else {
+    console.log("✅ SQLite conectado em", dbPath);
+  }
+});
+
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      email TEXT UNIQUE,
+      password TEXT,
+      role TEXT DEFAULT 'user',
+      subscription_status TEXT DEFAULT 'pending',
+      subscription_expires_at TEXT
+    )
+  `);
+});
 
 // =======================================================================
 // AUTH MIDDLEWARE
 // =======================================================================
 function auth(req, res, next) {
   const header = req.headers.authorization;
-  if (!header || !header.startsWith("Bearer "))
+  if (!header || !header.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Token ausente" });
+  }
 
   jwt.verify(
     header.replace("Bearer ", ""),
     process.env.JWT_SECRET,
     (err, decoded) => {
-      if (err)
+      if (err) {
         return res.status(401).json({ error: "Token inválido" });
+      }
       req.user = decoded;
       next();
     }
@@ -94,8 +100,9 @@ function auth(req, res, next) {
 
 function adminAuth(req, res, next) {
   auth(req, res, () => {
-    if (req.user.role !== "admin")
+    if (req.user.role !== "admin") {
       return res.status(403).json({ error: "Acesso negado" });
+    }
     next();
   });
 }
@@ -105,17 +112,21 @@ function adminAuth(req, res, next) {
 // =======================================================================
 app.post("/auth/register", (req, res) => {
   const { name, email, password } = req.body;
-  if (!email || !password)
+
+  if (!email || !password) {
     return res.status(400).json({ error: "Dados inválidos" });
+  }
 
   const hash = bcrypt.hashSync(password, 10);
 
   db.run(
     `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`,
-    [name, email, hash],
+    [name || "", email, hash],
     err => {
-      if (err)
+      if (err) {
+        console.error("❌ Erro cadastro:", err.message);
         return res.status(400).json({ error: "Email já cadastrado" });
+      }
       res.json({ success: true });
     }
   );
@@ -124,21 +135,27 @@ app.post("/auth/register", (req, res) => {
 app.post("/auth/login", (req, res) => {
   const { email, password } = req.body;
 
-  db.get(`SELECT * FROM users WHERE email=?`, [email], (_, user) => {
-    if (!user)
-      return res.status(404).json({ error: "Usuário não encontrado" });
+  db.get(
+    `SELECT * FROM users WHERE email=?`,
+    [email],
+    (_, user) => {
+      if (!user) {
+        return res.status(404).json({ error: "Usuário não encontrado" });
+      }
 
-    if (!bcrypt.compareSync(password, user.password))
-      return res.status(401).json({ error: "Senha incorreta" });
+      if (!bcrypt.compareSync(password, user.password)) {
+        return res.status(401).json({ error: "Senha incorreta" });
+      }
 
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+      const token = jwt.sign(
+        { id: user.id, email: user.email, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
 
-    res.json({ token });
-  });
+      res.json({ token });
+    }
+  );
 });
 
 // =======================================================================
@@ -149,8 +166,9 @@ app.get("/subscription/status", auth, (req, res) => {
     `SELECT subscription_status, subscription_expires_at FROM users WHERE id=?`,
     [req.user.id],
     (_, user) => {
-      if (!user)
+      if (!user) {
         return res.json({ subscription_status: "none" });
+      }
       res.json(user);
     }
   );
@@ -175,8 +193,15 @@ app.get("/admin/users", adminAuth, (_, res) => {
 });
 
 // =======================================================================
-// 🔥 FALLBACK CORRETO (SÓ FRONTEND)
+// FRONTEND ROUTES (BLINDAGEM)
 // =======================================================================
+
+// rota raiz explícita
+app.get("/", (_, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
+
+// fallback seguro (SPA)
 app.get(/^\/(?!auth|api|admin|subscription|health).*/, (_, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
