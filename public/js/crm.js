@@ -1,142 +1,121 @@
 // ============================================
-// CRM.JS — versão final (IA + histórico + tarefas)
+// CRM.JS — Aldra (COMPLETO + IA)
 // ============================================
 
 const token = localStorage.getItem("token");
-if (!token) window.location.href = "/login";
+if (!token) location.href = "/";
 
-// Cache dos clientes
 const clientsById = {};
 
+// ============================================
+// UTIL
+// ============================================
 async function safeJson(res) {
   try { return await res.json(); } catch { return null; }
 }
 
-// ============================================
-// CRIAR CLIENTE
-// ============================================
-async function createClient() {
-  const nome = cName.value.trim();
-  const email = cEmail.value.trim();
-  const telefone = cPhone.value.trim();
-  const notas = cNotes.value.trim();
-  const status = cStatus.value;
+function escapeHtml(t) {
+  return String(t || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
-  if (!nome) {
-    crmMsg.textContent = "O nome do cliente é obrigatório.";
-    crmMsg.style.color = "red";
-    return;
-  }
-
-  crmMsg.textContent = "Salvando...";
-  crmMsg.style.color = "black";
-
-  try {
-    const res = await fetch("/api/crm/clientes/add", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + token
-      },
-      body: JSON.stringify({ nome, email, telefone, empresa: "", notas, status })
-    });
-
-    const data = await safeJson(res);
-
-    if (!res.ok || !data?.success) {
-      crmMsg.textContent = data?.error || "Erro ao salvar";
-      crmMsg.style.color = "red";
-      return;
-    }
-
-    crmMsg.textContent = "Cliente salvo!";
-    crmMsg.style.color = "green";
-
-    cName.value = "";
-    cEmail.value = "";
-    cPhone.value = "";
-    cNotes.value = "";
-    cStatus.value = "lead";
-
-    loadClients();
-
-  } catch {
-    crmMsg.textContent = "Erro interno.";
-    crmMsg.style.color = "red";
-  }
+function loading(el, text = "Processando...") {
+  el.innerHTML = `<i>${text}</i>`;
 }
 
 // ============================================
-// LISTAR CLIENTES
+// CLIENTES
 // ============================================
 async function loadClients() {
   const box = document.getElementById("clients");
-  box.innerHTML = "Carregando...";
+  loading(box, "Carregando clientes...");
 
-  try {
-    const res = await fetch("/api/crm/clientes", {
-      headers: { Authorization: "Bearer " + token }
-    });
+  const res = await fetch("/api/crm/clients", {
+    headers: { Authorization: "Bearer " + token }
+  });
 
-    const data = await safeJson(res);
+  const data = await safeJson(res);
+  box.innerHTML = "";
 
-    if (!res.ok) {
-      box.innerHTML = "Erro ao carregar clientes.";
-      return;
-    }
-
-    box.innerHTML = "";
-    if (!data?.length) {
-      box.innerHTML = "Nenhum cliente cadastrado";
-      return;
-    }
-
-    data.forEach(c => clientsById[c.id] = c);
-
-    data.forEach(c => {
-      const card = document.createElement("div");
-      card.className = "card";
-
-      card.innerHTML = `
-        <b>${escapeHtml(c.nome)}</b><br>
-        <small>Email:</small> ${escapeHtml(c.email || "-")}<br>
-        <small>Telefone:</small> ${escapeHtml(c.telefone || "-")}<br>
-        <small>Status:</small> ${escapeHtml(c.status || "lead")}<br>
-        <small>Notas:</small> ${escapeHtml(c.notas || "Nenhuma")}<br><br>
-
-        <div class="client-actions">
-          <button class="small" onclick="openEdit(${c.id})">✏️ Editar</button>
-          <button class="small" onclick="openTimeline(${c.id})">📜 Histórico</button>
-          <button class="small" onclick="openTasks(${c.id})">📌 Tarefas</button>
-          <button class="small" onclick="generateSummary(${c.id})">🧠 Resumo IA</button>
-          <button class="small btn-danger" onclick="deleteClient(${c.id})">Excluir</button>
-        </div>
-
-        <div id="summary-${c.id}" class="summary" style="display:none"></div>
-      `;
-
-      box.appendChild(card);
-    });
-
-  } catch {
-    box.innerHTML = "Erro ao carregar.";
+  if (!data?.length) {
+    box.innerHTML = "<i>Nenhum cliente cadastrado.</i>";
+    return;
   }
+
+  data.forEach(c => clientsById[c.id] = c);
+
+  data.forEach(c => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    card.innerHTML = `
+      <b>${escapeHtml(c.name)}</b><br>
+      <small>Email:</small> ${escapeHtml(c.email || "-")}<br>
+      <small>Telefone:</small> ${escapeHtml(c.phone || "-")}<br>
+      <small>Status:</small> ${escapeHtml(c.status)}<br>
+      <small>Notas:</small> ${escapeHtml(c.notes || "-")}<br><br>
+
+      <div class="client-actions">
+        <button class="small" onclick="openEdit(${c.id})">✏️ Editar</button>
+        <button class="small" onclick="openTimeline(${c.id})">📜 Histórico</button>
+        <button class="small" onclick="openTasks(${c.id})">📌 Tarefas</button>
+        <button class="small" onclick="analyzeClientIA(${c.id})">🤖 IA</button>
+        <button class="small btn-danger" onclick="deleteClient(${c.id})">Excluir</button>
+      </div>
+    `;
+    box.appendChild(card);
+  });
+}
+
+async function createClient() {
+  const payload = {
+    name: cName.value.trim(),
+    email: cEmail.value.trim(),
+    phone: cPhone.value.trim(),
+    status: cStatus.value,
+    notes: cNotes.value.trim()
+  };
+
+  if (!payload.name) return alert("Nome obrigatório.");
+
+  await fetch("/api/crm/clients", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + token
+    },
+    body: JSON.stringify(payload)
+  });
+
+  cName.value = cEmail.value = cPhone.value = cNotes.value = "";
+  cStatus.value = "lead";
+  loadClients();
+}
+
+async function deleteClient(id) {
+  if (!confirm("Excluir cliente?")) return;
+
+  await fetch(`/api/crm/clients/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: "Bearer " + token }
+  });
+
+  loadClients();
 }
 
 // ============================================
-// EDITAR CLIENTE
+// EDITAR
 // ============================================
 function openEdit(id) {
   const c = clientsById[id];
-  if (!c) return alert("Cliente não encontrado!");
-
   editId.value = id;
-  eName.value = c.nome || "";
+  eName.value = c.name;
   eEmail.value = c.email || "";
-  ePhone.value = c.telefone || "";
-  eStatus.value = c.status || "lead";
-  eNotes.value = c.notas || "";
-
+  ePhone.value = c.phone || "";
+  eStatus.value = c.status;
+  eNotes.value = c.notes || "";
   document.getElementById("editModal").style.display = "flex";
 }
 
@@ -146,85 +125,28 @@ function closeEdit() {
 
 async function saveEdit() {
   const id = editId.value;
-  const nome = eName.value.trim();
 
-  if (!nome) return alert("O nome é obrigatório.");
-
-  const payload = {
-    id,
-    nome,
-    email: eEmail.value.trim(),
-    telefone: ePhone.value.trim(),
-    empresa: "",
-    notas: eNotes.value.trim(),
-    status: eStatus.value
-  };
-
-  try {
-    const res = await fetch("/api/crm/clientes/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await safeJson(res);
-
-    if (!res.ok || !data?.success) {
-      alert(data?.error || "Erro ao editar");
-      return;
-    }
-
-    closeEdit();
-    loadClients();
-
-  } catch {
-    alert("Erro interno ao editar");
-  }
-}
-
-// ============================================
-// IA RESUMO DO CLIENTE
-// ============================================
-async function generateSummary(id) {
-  const area = document.getElementById(`summary-${id}`);
-  const cli = clientsById[id];
-
-  area.style.display = "block";
-  area.textContent = "Gerando resumo...";
-
-  const res = await fetch("/api/crm/ia/resumo", {
-    method: "POST",
+  await fetch(`/api/crm/clients/${id}`, {
+    method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Authorization: "Bearer " + token
     },
-    body: JSON.stringify({ cliente: cli })
+    body: JSON.stringify({
+      name: eName.value.trim(),
+      email: eEmail.value.trim(),
+      phone: ePhone.value.trim(),
+      status: eStatus.value,
+      notes: eNotes.value.trim()
+    })
   });
 
-  const data = await safeJson(res);
-  area.textContent = data?.result || "Erro ao gerar resumo";
-}
-
-// ============================================
-// EXCLUIR CLIENTE
-// ============================================
-async function deleteClient(id) {
-  if (!confirm("Excluir cliente?")) return;
-
-  await fetch("/api/crm/clientes/delete", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + token
-    },
-    body: JSON.stringify({ id })
-  });
-
+  closeEdit();
   loadClients();
 }
 
 // ============================================
-// HISTÓRICO (TIMELINE)
+// HISTÓRICO
 // ============================================
 function openTimeline(id) {
   timelineClientId.value = id;
@@ -238,9 +160,9 @@ function closeTimeline() {
 
 async function loadTimeline(id) {
   const box = document.getElementById("timelineContent");
-  box.innerHTML = "Carregando...";
+  loading(box, "Carregando histórico...");
 
-  const res = await fetch(`/api/crm/historico/${id}`, {
+  const res = await fetch(`/api/crm/timeline/${id}`, {
     headers: { Authorization: "Bearer " + token }
   });
 
@@ -248,46 +170,41 @@ async function loadTimeline(id) {
   box.innerHTML = "";
 
   if (!data?.length) {
-    box.innerHTML = "<i>Nenhum evento ainda.</i>";
+    box.innerHTML = "<i>Nenhum histórico.</i>";
     return;
   }
 
-  data.forEach(item => {
+  data.forEach(i => {
     const div = document.createElement("div");
     div.className = "timeline-item";
     div.innerHTML = `
-      <b>${escapeHtml(item.tipo)}</b><br>
-      ${escapeHtml(item.descricao)}<br>
-      <small>${item.created_at}</small>
+      ${escapeHtml(i.text)}<br>
+      <small>${i.created_at}</small>
     `;
     box.appendChild(div);
   });
 }
 
 async function addTimelineEntry() {
-  const cliente_id = timelineClientId.value;
-  const descricao = timelineNewEntry.value.trim();
-  if (!descricao) return;
+  const id = timelineClientId.value;
+  const text = timelineNewEntry.value.trim();
+  if (!text) return;
 
-  await fetch("/api/crm/historico/add", {
+  await fetch(`/api/crm/timeline/${id}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: "Bearer " + token
     },
-    body: JSON.stringify({
-      cliente_id,
-      tipo: "Anotação",
-      descricao
-    })
+    body: JSON.stringify({ text })
   });
 
   timelineNewEntry.value = "";
-  loadTimeline(cliente_id);
+  loadTimeline(id);
 }
 
 // ============================================
-// TAREFAS (FOLLOW-UP)
+// TAREFAS
 // ============================================
 function openTasks(id) {
   taskClientId.value = id;
@@ -301,9 +218,9 @@ function closeTasks() {
 
 async function loadTasks(id) {
   const box = document.getElementById("tasksList");
-  box.innerHTML = "Carregando...";
+  loading(box, "Carregando tarefas...");
 
-  const res = await fetch(`/api/crm/tarefas/${id}`, {
+  const res = await fetch(`/api/crm/tasks/${id}`, {
     headers: { Authorization: "Bearer " + token }
   });
 
@@ -318,72 +235,92 @@ async function loadTasks(id) {
   data.forEach(t => {
     const div = document.createElement("div");
     div.className = "task-item";
-
     div.innerHTML = `
-      <b>${escapeHtml(t.titulo)}</b><br>
-      <small>${escapeHtml(t.descricao || "")}</small><br>
-      <small>Prazo: ${t.data_limite}</small><br>
-      <small>Status: ${t.status}</small><br><br>
-
-      <button class="small" onclick="finishTask(${t.id})">✔ Concluir</button>
+      ${escapeHtml(t.text)}<br>
+      <small>Prazo: ${t.due_date || "-"}</small><br>
+      <small>Status: ${t.done ? "Concluída" : "Pendente"}</small><br><br>
+      ${!t.done ? `<button class="small" onclick="finishTask(${t.id})">✔ Concluir</button>` : ""}
     `;
-
     box.appendChild(div);
   });
 }
 
 async function createTask() {
-  const cliente_id = taskClientId.value;
-  const descricao = taskDesc.value.trim();
-  const data_limite = taskDate.value;
+  const id = taskClientId.value;
+  const text = taskText.value.trim();
+  const due_date = taskDate.value;
 
-  if (!descricao || !data_limite)
-    return alert("Descrição e prazo são obrigatórios.");
+  if (!text) return alert("Descrição obrigatória.");
 
-  await fetch("/api/crm/tarefas/add", {
+  await fetch(`/api/crm/tasks/${id}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: "Bearer " + token
     },
-    body: JSON.stringify({
-      cliente_id,
-      titulo: "Tarefa",
-      descricao,
-      data_limite
-    })
+    body: JSON.stringify({ text, due_date })
   });
 
-  taskDesc.value = "";
+  taskText.value = "";
   taskDate.value = "";
-
-  loadTasks(cliente_id);
+  loadTasks(id);
 }
 
 async function finishTask(id) {
-  await fetch("/api/crm/tarefas/update", {
-    method: "POST",
+  await fetch(`/api/crm/tasks/${id}`, {
+    method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Authorization: "Bearer " + token
     },
-    body: JSON.stringify({
-      id,
-      status: "concluida"
-    })
+    body: JSON.stringify({ done: true })
   });
 
   loadTasks(taskClientId.value);
 }
 
 // ============================================
-// UTIL
+// IA — GROQ CRM
 // ============================================
-function escapeHtml(t) {
-  return String(t || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+async function analyzeClientIA(id) {
+  const client = clientsById[id];
+  if (!client) return;
+
+  const prompt = `
+Cliente:
+Nome: ${client.name}
+Email: ${client.email || "-"}
+Telefone: ${client.phone || "-"}
+Status: ${client.status}
+Notas: ${client.notes || "-"}
+
+Analise o cliente e sugira:
+- Resumo
+- Próximas ações
+- Estratégia de abordagem
+`;
+
+  alert("🤖 A IA está analisando o cliente...");
+
+  const res = await fetch("/api/ai/crm", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + token
+    },
+    body: JSON.stringify({ prompt })
+  });
+
+  const data = await safeJson(res);
+  if (!data?.response) {
+    alert("Erro ao gerar análise da IA.");
+    return;
+  }
+
+  eNotes.value = `${client.notes || ""}\n\n🤖 IA:\n${data.response}`;
+  editId.value = id;
+  document.getElementById("editModal").style.display = "flex";
 }
 
+// INIT
 loadClients();
