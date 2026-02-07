@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (AUTH + ASSINATURA + CRM + IA GROQ — FINAL ESTÁVEL)
+// Aldra — server.js (AUTH + ASSINATURA + CRM + IA GROQ — FINAL BLINDADO)
 // =======================================================================
 
 import express from "express";
@@ -123,7 +123,7 @@ app.post("/auth/register", (req, res) => {
       if (err) return res.status(400).json({ error: "Email já existe" });
 
       db.run(
-        `INSERT INTO subscriptions (user_id,status) VALUES (?,?)`,
+        `INSERT OR IGNORE INTO subscriptions (user_id,status) VALUES (?,?)`,
         [this.lastID, "pending"]
       );
 
@@ -139,6 +139,12 @@ app.post("/auth/login", (req, res) => {
     if (!u) return res.status(404).json({ error: "Usuário não encontrado" });
     if (!bcrypt.compareSync(password, u.password))
       return res.status(401).json({ error: "Senha incorreta" });
+
+    // 🔒 GARANTE ASSINATURA SEMPRE
+    db.run(
+      `INSERT OR IGNORE INTO subscriptions (user_id,status) VALUES (?,?)`,
+      [u.id, "pending"]
+    );
 
     const token = jwt.sign({ id: u.id }, process.env.JWT_SECRET, {
       expiresIn: "7d"
@@ -156,8 +162,9 @@ app.get("/subscription/status", auth, (req, res) => {
     `SELECT * FROM subscriptions WHERE user_id=?`,
     [req.user.id],
     (_, sub) => {
-      if (!sub)
+      if (!sub) {
         return res.json({ subscription_status: "pending" });
+      }
 
       res.json({
         subscription_status: sub.status,
@@ -167,7 +174,7 @@ app.get("/subscription/status", auth, (req, res) => {
   );
 });
 
-// 🔓 Ativar assinatura (chamar após pagamento aprovado)
+// 🔓 Ativar assinatura (pós pagamento)
 app.post("/subscription/activate", auth, (req, res) => {
   const expires = new Date();
   expires.setDate(expires.getDate() + 30);
@@ -184,7 +191,7 @@ app.post("/subscription/activate", auth, (req, res) => {
 });
 
 // =======================================================================
-// CRM
+// CRM (ACEITA NOME/TELEFONE DO FRONT)
 // =======================================================================
 app.get("/api/crm", auth, (req, res) => {
   db.all(
@@ -195,7 +202,9 @@ app.get("/api/crm", auth, (req, res) => {
 });
 
 app.post("/api/crm", auth, (req, res) => {
-  const { name, email, phone, status, notes } = req.body;
+  const name = req.body.name || req.body.nome;
+  const phone = req.body.phone || req.body.telefone;
+  const { email, status = "lead", notes = "" } = req.body;
 
   db.run(
     `
@@ -206,28 +215,6 @@ app.post("/api/crm", auth, (req, res) => {
     function () {
       res.json({ success: true, id: this.lastID });
     }
-  );
-});
-
-app.put("/api/crm/:id", auth, (req, res) => {
-  const { name, email, phone, status, notes } = req.body;
-
-  db.run(
-    `
-    UPDATE crm_clients
-    SET name=?, email=?, phone=?, status=?, notes=?
-    WHERE id=? AND user_id=?
-    `,
-    [name, email, phone, status, notes, req.params.id, req.user.id],
-    () => res.json({ success: true })
-  );
-});
-
-app.delete("/api/crm/:id", auth, (req, res) => {
-  db.run(
-    `DELETE FROM crm_clients WHERE id=? AND user_id=?`,
-    [req.params.id, req.user.id],
-    () => res.json({ success: true })
   );
 });
 
