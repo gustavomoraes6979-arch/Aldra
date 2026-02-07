@@ -1,12 +1,12 @@
 // ==========================================
-// dashboard.js — Aldra Dashboard (FINAL + ALERTA RENOVAÇÃO)
+// dashboard.js — Aldra Dashboard (ANTI-LOOP FINAL)
 // ==========================================
 
 document.addEventListener("DOMContentLoaded", () => {
   console.log("🚀 Dashboard iniciado");
 
   // ==========================================
-  // SEÇÕES DISPONÍVEIS
+  // SEÇÕES
   // ==========================================
   const sections = [
     "sectionPdf",
@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ];
 
   function showSection(id) {
-    let valid = false;
+    let showed = false;
 
     sections.forEach(sec => {
       const el = document.getElementById(sec);
@@ -26,28 +26,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (sec === id) {
         el.style.display = "block";
-        valid = true;
+        showed = true;
       } else {
         el.style.display = "none";
       }
     });
 
-    if (!valid) {
-      const fallback = sections.find(s => document.getElementById(s));
-      if (fallback) document.getElementById(fallback).style.display = "block";
+    if (!showed) {
+      const first = sections.find(s => document.getElementById(s));
+      if (first) document.getElementById(first).style.display = "block";
     }
 
     if (id === "sectionCRM") loadCRM();
   }
 
-  // ==========================================
-  // INIT DASHBOARD
-  // ==========================================
   function initDashboard() {
-    console.log("✅ Assinatura ativa, acesso liberado");
     const first =
       sections.find(s => document.getElementById(s)) || "sectionPdf";
     showSection(first);
+  }
+
+  // ==========================================
+  // TOKEN
+  // ==========================================
+  function getTokenPayload(token) {
+    try {
+      return JSON.parse(atob(token.split(".")[1]));
+    } catch {
+      return null;
+    }
   }
 
   // ==========================================
@@ -85,16 +92,28 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ==========================================
-  // VERIFICAÇÃO DE ACESSO + ASSINATURA
+  // VERIFICAÇÃO DE ACESSO (SEM LOOP)
   // ==========================================
   async function verifyAccess() {
     const token = localStorage.getItem("token");
 
     if (!token) {
-      location.href = "/";
+      location.replace("/");
       return;
     }
 
+    const payload = getTokenPayload(token);
+
+    if (!payload || !payload.id) {
+      localStorage.removeItem("token");
+      location.replace("/");
+      return;
+    }
+
+    // ✅ Libera dashboard imediatamente
+    initDashboard();
+
+    // 🔄 Validação em background (NÃO BLOQUEIA)
     try {
       const res = await fetch("/subscription/status", {
         headers: {
@@ -103,8 +122,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       if (!res.ok) {
-        localStorage.removeItem("token");
-        location.href = "/";
+        console.warn("⚠️ Assinatura não validada agora (rede)");
         return;
       }
 
@@ -116,11 +134,10 @@ document.addEventListener("DOMContentLoaded", () => {
         (data.subscription_expires_at &&
           new Date(data.subscription_expires_at) < new Date())
       ) {
-        location.href = "/payment";
+        location.replace("/payment");
         return;
       }
 
-      // ===== ALERTA RENOVAÇÃO =====
       if (data.subscription_expires_at) {
         const now = new Date();
         const expires = new Date(data.subscription_expires_at);
@@ -132,12 +149,8 @@ document.addEventListener("DOMContentLoaded", () => {
           showRenewAlert(diff);
         }
       }
-
-      initDashboard();
     } catch (err) {
-      console.error("❌ Falha ao validar assinatura:", err);
-      alert("Erro ao validar acesso");
-      location.href = "/";
+      console.warn("⚠️ Erro silencioso na verificação:", err.message);
     }
   }
 
@@ -164,30 +177,27 @@ document.addEventListener("DOMContentLoaded", () => {
   async function api(url, method = "GET", body = null) {
     const token = localStorage.getItem("token");
     if (!token) {
-      location.href = "/";
+      location.replace("/");
       return;
     }
 
-    const options = {
+    const res = await fetch(url, {
       method,
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json"
-      }
-    };
-
-    if (body) options.body = JSON.stringify(body);
-
-    const res = await fetch(url, options);
+      },
+      body: body ? JSON.stringify(body) : null
+    });
 
     if (res.status === 401 || res.status === 403) {
       localStorage.removeItem("token");
-      location.href = "/";
+      location.replace("/");
       return;
     }
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Erro na API");
+    if (!res.ok) throw new Error(data.error || "Erro API");
 
     return data;
   }
@@ -217,20 +227,18 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ==========================================
-  // CRM (LAZY LOAD)
+  // CRM
   // ==========================================
   function loadCRM() {
     const iframe = document.querySelector("#sectionCRM iframe");
-    if (iframe && !iframe.src) {
-      iframe.src = "/crm";
-    }
+    if (iframe && !iframe.src) iframe.src = "/crm";
   }
 
   // ==========================================
-  // LOGOUT GLOBAL
+  // LOGOUT
   // ==========================================
   window.logout = function () {
     localStorage.removeItem("token");
-    location.href = "/";
+    location.replace("/");
   };
 });

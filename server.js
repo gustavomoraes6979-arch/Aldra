@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (CRM + IA GROQ — FINAL)
+// Aldra — server.js (AUTH + ASSINATURA + CRM + IA GROQ — FINAL ESTÁVEL)
 // =======================================================================
 
 import express from "express";
@@ -67,6 +67,16 @@ db.serialize(() => {
   `);
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER UNIQUE,
+      status TEXT DEFAULT 'pending',
+      expires_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS crm_clients (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
@@ -81,7 +91,7 @@ db.serialize(() => {
 });
 
 // =======================================================================
-// AUTH
+// AUTH MIDDLEWARE
 // =======================================================================
 function auth(req, res, next) {
   const h = req.headers.authorization;
@@ -100,7 +110,7 @@ function auth(req, res, next) {
 }
 
 // =======================================================================
-// AUTH ROUTES
+// AUTH
 // =======================================================================
 app.post("/auth/register", (req, res) => {
   const { name, email, password } = req.body;
@@ -109,8 +119,14 @@ app.post("/auth/register", (req, res) => {
   db.run(
     `INSERT INTO users (name,email,password) VALUES (?,?,?)`,
     [name || "", email, hash],
-    err => {
+    function (err) {
       if (err) return res.status(400).json({ error: "Email já existe" });
+
+      db.run(
+        `INSERT INTO subscriptions (user_id,status) VALUES (?,?)`,
+        [this.lastID, "pending"]
+      );
+
       res.json({ success: true });
     }
   );
@@ -133,7 +149,42 @@ app.post("/auth/login", (req, res) => {
 });
 
 // =======================================================================
-// CRM — CLIENTES (ROTAS PADRONIZADAS)
+// ASSINATURA
+// =======================================================================
+app.get("/subscription/status", auth, (req, res) => {
+  db.get(
+    `SELECT * FROM subscriptions WHERE user_id=?`,
+    [req.user.id],
+    (_, sub) => {
+      if (!sub)
+        return res.json({ subscription_status: "pending" });
+
+      res.json({
+        subscription_status: sub.status,
+        subscription_expires_at: sub.expires_at
+      });
+    }
+  );
+});
+
+// 🔓 Ativar assinatura (chamar após pagamento aprovado)
+app.post("/subscription/activate", auth, (req, res) => {
+  const expires = new Date();
+  expires.setDate(expires.getDate() + 30);
+
+  db.run(
+    `
+    UPDATE subscriptions
+    SET status='active', expires_at=?
+    WHERE user_id=?
+    `,
+    [expires.toISOString(), req.user.id],
+    () => res.json({ success: true })
+  );
+});
+
+// =======================================================================
+// CRM
 // =======================================================================
 app.get("/api/crm", auth, (req, res) => {
   db.all(
@@ -181,7 +232,7 @@ app.delete("/api/crm/:id", auth, (req, res) => {
 });
 
 // =======================================================================
-// 🤖 IA — GROQ
+// IA GROQ
 // =======================================================================
 async function groq(prompt) {
   const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -200,34 +251,6 @@ async function groq(prompt) {
   const j = await r.json();
   return j.choices?.[0]?.message?.content || "Erro IA";
 }
-
-// =======================================================================
-// 🤖 IA — SUGESTÃO AUTOMÁTICA DO CLIENTE
-// =======================================================================
-app.get("/api/crm/ai/:id", auth, async (req, res) => {
-  db.get(
-    `SELECT * FROM crm_clients WHERE id=? AND user_id=?`,
-    [req.params.id, req.user.id],
-    async (_, c) => {
-      if (!c) return res.status(404).json({ error: "Cliente não encontrado" });
-
-      const prompt = `
-Você é um CRM inteligente.
-Cliente: ${c.name}
-Status: ${c.status}
-Notas: ${c.notes || "Sem notas"}
-
-1. Resuma rapidamente o contexto do cliente
-2. Sugira a próxima ação prática para avançar
-
-Resposta curta e objetiva.
-`;
-
-      const text = await groq(prompt);
-      res.json({ text });
-    }
-  );
-});
 
 // =======================================================================
 // FRONTEND
