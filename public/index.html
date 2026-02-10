@@ -100,12 +100,6 @@
   </div>
 
   <script>
-    // 🔐 Se já estiver logado, vai direto pro dashboard
-    const existingToken = localStorage.getItem("token");
-    if (existingToken) {
-      window.location.replace("/dashboard");
-    }
-
     let mode = "login";
     let loading = false;
 
@@ -194,7 +188,6 @@
 
     mainBtn.onclick = submit;
 
-    // ⌨️ Enter funciona
     [emailInput, passwordInput, nameInput].forEach(input => {
       input.addEventListener("keydown", e => {
         if (e.key === "Enter") submit();

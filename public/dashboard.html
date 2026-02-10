@@ -88,6 +88,10 @@
       display: none;
     }
 
+    .section.active {
+      display: block;
+    }
+
     input, textarea {
       width: 100%;
       padding: 12px;
@@ -141,7 +145,7 @@
   <button onclick="showSection('CRM')">📊 CRM</button>
 </div>
 
-<div id="sectionChat" class="section">
+<div id="sectionChat" class="section active">
   <h2>💬 Chat Inteligente</h2>
   <textarea readonly placeholder="Resposta da IA..."></textarea>
   <input placeholder="Digite sua mensagem...">
@@ -170,8 +174,8 @@
   </table>
 </div>
 
-<!-- JS ÚNICO -->
-<script src="/js/dashboard.js"></script>
+<!-- JS carregado com defer para evitar loop -->
+<script src="/js/dashboard.js" defer></script>
 
 </body>
 </html>
