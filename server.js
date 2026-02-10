@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (AUTH + ASSINATURA + CRM + IA GROQ) — ESTÁVEL FINAL
+// Aldra — server.js (AUTH + ASSINATURA + CRM + IA GROQ) — NODE 22 SAFE
 // =======================================================================
 
 import express from "express";
@@ -86,7 +86,7 @@ db.serialize(() => {
 });
 
 // =======================================================================
-// AUTH MIDDLEWARE
+// AUTH
 // =======================================================================
 function auth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -106,32 +106,26 @@ function auth(req, res, next) {
 }
 
 // =======================================================================
-// ASSINATURA MIDDLEWARE (SEM REDIRECT)
+// ASSINATURA (SEM REDIRECT)
 // =======================================================================
 function assinaturaAtiva(req, res, next) {
   db.get(
     `SELECT status FROM subscriptions WHERE user_id=?`,
     [req.user.id],
-    (err, sub) => {
-      if (err) {
-        console.error("Erro assinatura:", err);
-        return res.status(500).json({ error: "Erro interno" });
-      }
-
+    (_, sub) => {
       if (!sub || sub.status !== "active") {
         return res.status(403).json({
           error: "Assinatura inativa",
           code: "SUBSCRIPTION_INACTIVE"
         });
       }
-
       next();
     }
   );
 }
 
 // =======================================================================
-// AUTH
+// AUTH ROUTES
 // =======================================================================
 app.post("/auth/register", (req, res) => {
   const { name = "", email, password } = req.body;
@@ -195,21 +189,8 @@ app.get("/subscription/status", auth, (req, res) => {
   );
 });
 
-app.post("/subscription/activate", auth, (req, res) => {
-  const expires = new Date();
-  expires.setDate(expires.getDate() + 30);
-
-  db.run(
-    `UPDATE subscriptions
-     SET status='active', expires_at=?
-     WHERE user_id=?`,
-    [expires.toISOString(), req.user.id],
-    () => res.json({ success: true })
-  );
-});
-
 // =======================================================================
-// CRM (COMPATÍVEL COM FRONTEND)
+// CRM
 // =======================================================================
 app.get("/api/crm", auth, assinaturaAtiva, (req, res) => {
   db.all(
@@ -220,12 +201,9 @@ app.get("/api/crm", auth, assinaturaAtiva, (req, res) => {
 });
 
 app.post("/api/crm", auth, assinaturaAtiva, (req, res) => {
-  // aceita PT ou EN
   const name = req.body.name || req.body.nome;
   const email = req.body.email;
   const phone = req.body.phone || req.body.telefone || "";
-  const status = req.body.status || "lead";
-  const notes = req.body.notes || "";
 
   if (!name || !email) {
     return res.status(400).json({ error: "Nome e email obrigatórios" });
@@ -233,10 +211,10 @@ app.post("/api/crm", auth, assinaturaAtiva, (req, res) => {
 
   db.run(
     `
-    INSERT INTO crm_clients (user_id,name,email,phone,status,notes)
-    VALUES (?,?,?,?,?,?)
+    INSERT INTO crm_clients (user_id,name,email,phone)
+    VALUES (?,?,?,?)
     `,
-    [req.user.id, name, email, phone, status, notes],
+    [req.user.id, name, email, phone],
     function () {
       res.json({ success: true, id: this.lastID });
     }
@@ -244,36 +222,17 @@ app.post("/api/crm", auth, assinaturaAtiva, (req, res) => {
 });
 
 // =======================================================================
-// IA GROQ
-// =======================================================================
-async function groq(prompt) {
-  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "llama3-70b-8192",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.4
-    })
-  });
-
-  const j = await r.json();
-  return j.choices?.[0]?.message?.content || "Erro IA";
-}
-
-// =======================================================================
-// FRONTEND (SEM LOOP)
+// FRONTEND — NODE 22 SAFE (SEM "*")
 // =======================================================================
 app.get("/", (_, res) =>
   res.sendFile(path.join(PUBLIC_DIR, "index.html"))
 );
 
-// fallback apenas para SPA
-app.get("*", (req, res) => {
-  if (req.path.includes(".")) return res.status(404).end();
+// Fallback SPA — regex compatível com Node 22
+app.get(/.*/, (req, res) => {
+  if (req.path.includes(".")) {
+    return res.status(404).end();
+  }
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
