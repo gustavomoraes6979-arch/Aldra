@@ -66,6 +66,11 @@
       margin-top: 12px;
     }
 
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     .msg {
       margin-top: 12px;
       text-align: center;
@@ -95,7 +100,14 @@
   </div>
 
   <script>
+    // 🔐 Se já estiver logado, vai direto pro dashboard
+    const existingToken = localStorage.getItem("token");
+    if (existingToken) {
+      window.location.replace("/dashboard");
+    }
+
     let mode = "login";
+    let loading = false;
 
     const nameInput = document.getElementById("name");
     const emailInput = document.getElementById("email");
@@ -123,7 +135,11 @@
       }
     };
 
-    mainBtn.onclick = async () => {
+    async function submit() {
+      if (loading) return;
+      loading = true;
+      mainBtn.disabled = true;
+
       msg.style.color = "red";
       msg.innerText = "";
 
@@ -133,12 +149,13 @@
 
       if (!email || !password || (mode === "register" && !name)) {
         msg.innerText = "Preencha todos os campos";
+        loading = false;
+        mainBtn.disabled = false;
         return;
       }
 
       try {
-        const url =
-          mode === "login" ? "/auth/login" : "/auth/register";
+        const url = mode === "login" ? "/auth/login" : "/auth/register";
 
         const body =
           mode === "login"
@@ -160,17 +177,29 @@
 
         if (mode === "login") {
           localStorage.setItem("token", data.token);
-          window.location.href = "/dashboard.html";
+          window.location.replace("/dashboard");
         } else {
           msg.style.color = "green";
           msg.innerText = "Conta criada com sucesso! Faça login.";
           toggleBtn.click();
         }
 
-      } catch (e) {
+      } catch {
         msg.innerText = "Erro ao conectar com o servidor";
+      } finally {
+        loading = false;
+        mainBtn.disabled = false;
       }
-    };
+    }
+
+    mainBtn.onclick = submit;
+
+    // ⌨️ Enter funciona
+    [emailInput, passwordInput, nameInput].forEach(input => {
+      input.addEventListener("keydown", e => {
+        if (e.key === "Enter") submit();
+      });
+    });
   </script>
 </body>
 </html>

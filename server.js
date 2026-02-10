@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (AUTH + ASSINATURA + CRM + IA GROQ — FINAL BLINDADO)
+// Aldra — server.js (AUTH + ASSINATURA + CRM COMPLETO + IA GROQ)
 // =======================================================================
 
 import express from "express";
@@ -21,7 +21,6 @@ if (!process.env.JWT_SECRET) {
   console.error("❌ JWT_SECRET não definido");
   process.exit(1);
 }
-
 if (!process.env.GROQ_API_KEY) {
   console.error("❌ GROQ_API_KEY não definido");
   process.exit(1);
@@ -45,11 +44,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(PUBLIC_DIR));
-
-// =======================================================================
-// HEALTH
-// =======================================================================
-app.get("/health", (_, res) => res.json({ status: "ok" }));
 
 // =======================================================================
 // DATABASE
@@ -95,15 +89,27 @@ db.serialize(() => {
 // =======================================================================
 function auth(req, res, next) {
   const h = req.headers.authorization;
-  if (!h || !h.startsWith("Bearer "))
+  if (!h?.startsWith("Bearer "))
     return res.status(401).json({ error: "Token ausente" });
 
-  jwt.verify(
-    h.replace("Bearer ", ""),
-    process.env.JWT_SECRET,
-    (err, decoded) => {
-      if (err) return res.status(401).json({ error: "Token inválido" });
-      req.user = decoded;
+  jwt.verify(h.replace("Bearer ", ""), process.env.JWT_SECRET, (err, decoded) => {
+    if (err) return res.status(401).json({ error: "Token inválido" });
+    req.user = decoded;
+    next();
+  });
+}
+
+// =======================================================================
+// ASSINATURA
+// =======================================================================
+function assinaturaAtiva(req, res, next) {
+  db.get(
+    `SELECT status FROM subscriptions WHERE user_id=?`,
+    [req.user.id],
+    (_, sub) => {
+      if (!sub || sub.status !== "active") {
+        return res.status(403).json({ error: "Assinatura inativa" });
+      }
       next();
     }
   );
@@ -113,12 +119,12 @@ function auth(req, res, next) {
 // AUTH
 // =======================================================================
 app.post("/auth/register", (req, res) => {
-  const { name, email, password } = req.body;
+  const { name = "", email, password } = req.body;
   const hash = bcrypt.hashSync(password, 10);
 
   db.run(
     `INSERT INTO users (name,email,password) VALUES (?,?,?)`,
-    [name || "", email, hash],
+    [name, email, hash],
     function (err) {
       if (err) return res.status(400).json({ error: "Email já existe" });
 
@@ -140,7 +146,6 @@ app.post("/auth/login", (req, res) => {
     if (!bcrypt.compareSync(password, u.password))
       return res.status(401).json({ error: "Senha incorreta" });
 
-    // 🔒 GARANTE ASSINATURA SEMPRE
     db.run(
       `INSERT OR IGNORE INTO subscriptions (user_id,status) VALUES (?,?)`,
       [u.id, "pending"]
@@ -162,9 +167,7 @@ app.get("/subscription/status", auth, (req, res) => {
     `SELECT * FROM subscriptions WHERE user_id=?`,
     [req.user.id],
     (_, sub) => {
-      if (!sub) {
-        return res.json({ subscription_status: "pending" });
-      }
+      if (!sub) return res.json({ subscription_status: "pending" });
 
       res.json({
         subscription_status: sub.status,
@@ -174,26 +177,23 @@ app.get("/subscription/status", auth, (req, res) => {
   );
 });
 
-// 🔓 Ativar assinatura (pós pagamento)
 app.post("/subscription/activate", auth, (req, res) => {
   const expires = new Date();
   expires.setDate(expires.getDate() + 30);
 
   db.run(
-    `
-    UPDATE subscriptions
-    SET status='active', expires_at=?
-    WHERE user_id=?
-    `,
+    `UPDATE subscriptions SET status='active', expires_at=? WHERE user_id=?`,
     [expires.toISOString(), req.user.id],
     () => res.json({ success: true })
   );
 });
 
 // =======================================================================
-// CRM (ACEITA NOME/TELEFONE DO FRONT)
+// CRM — COMPLETO
 // =======================================================================
-app.get("/api/crm", auth, (req, res) => {
+
+// LISTAR
+app.get("/api/crm", auth, assinaturaAtiva, (req, res) => {
   db.all(
     `SELECT * FROM crm_clients WHERE user_id=? ORDER BY created_at DESC`,
     [req.user.id],
@@ -201,10 +201,12 @@ app.get("/api/crm", auth, (req, res) => {
   );
 });
 
-app.post("/api/crm", auth, (req, res) => {
-  const name = req.body.name || req.body.nome;
-  const phone = req.body.phone || req.body.telefone;
-  const { email, status = "lead", notes = "" } = req.body;
+// CRIAR
+app.post("/api/crm", auth, assinaturaAtiva, (req, res) => {
+  const { name, email, phone = "", status = "lead", notes = "" } = req.body;
+
+  if (!name || !email)
+    return res.status(400).json({ error: "Nome e email obrigatórios" });
 
   db.run(
     `
@@ -214,6 +216,34 @@ app.post("/api/crm", auth, (req, res) => {
     [req.user.id, name, email, phone, status, notes],
     function () {
       res.json({ success: true, id: this.lastID });
+    }
+  );
+});
+
+// EDITAR
+app.put("/api/crm/:id", auth, assinaturaAtiva, (req, res) => {
+  const { name, email, phone, status, notes } = req.body;
+
+  db.run(
+    `
+    UPDATE crm_clients
+    SET name=?, email=?, phone=?, status=?, notes=?
+    WHERE id=? AND user_id=?
+    `,
+    [name, email, phone, status, notes, req.params.id, req.user.id],
+    function () {
+      res.json({ success: this.changes > 0 });
+    }
+  );
+});
+
+// DELETAR
+app.delete("/api/crm/:id", auth, assinaturaAtiva, (req, res) => {
+  db.run(
+    `DELETE FROM crm_clients WHERE id=? AND user_id=?`,
+    [req.params.id, req.user.id],
+    function () {
+      res.json({ success: this.changes > 0 });
     }
   );
 });
@@ -246,7 +276,7 @@ app.get("/", (_, res) =>
   res.sendFile(path.join(PUBLIC_DIR, "index.html"))
 );
 
-app.get(/^\/(?!auth|api|health).*/, (_, res) =>
+app.get(/^\/(?!auth|api|health|subscription).*/, (_, res) =>
   res.sendFile(path.join(PUBLIC_DIR, "index.html"))
 );
 
