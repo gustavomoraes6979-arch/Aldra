@@ -1,9 +1,9 @@
 // ==========================================
-// dashboard.js — Aldra Dashboard (FINAL ESTÁVEL)
+// dashboard.js — Aldra Dashboard (ESTÁVEL)
 // ==========================================
 
-document.addEventListener("DOMContentLoaded", () => {
-  console.log("🚀 Dashboard iniciado");
+(function () {
+  console.log("🚀 Dashboard carregado");
 
   // ==========================================
   // TOKEN
@@ -15,19 +15,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ==========================================
-  // SEÇÕES (ALINHADO COM dashboard.html)
+  // SEÇÕES (IDs reais do HTML)
   // ==========================================
   const sections = ["sectionChat", "sectionCRM"];
 
   function showSection(name) {
-    sections.forEach(sec => {
-      const el = document.getElementById(sec);
+    sections.forEach(id => {
+      const el = document.getElementById(id);
       if (el) el.style.display = "none";
     });
 
     const active = document.getElementById("section" + name);
     if (active) active.style.display = "block";
 
+    // 👉 carrega CRM somente ao entrar
     if (name === "CRM" && typeof carregarClientes === "function") {
       carregarClientes();
     }
@@ -37,12 +38,14 @@ document.addEventListener("DOMContentLoaded", () => {
   showSection("Chat");
 
   // ==========================================
-  // ASSINATURA (SEM LOOP)
+  // ASSINATURA (SEM REDIRECT / SEM LOOP)
   // ==========================================
-  (async function checkSubscription() {
+  async function checkSubscription() {
     try {
       const res = await fetch("/subscription/status", {
-        headers: { Authorization: "Bearer " + token }
+        headers: {
+          Authorization: "Bearer " + token
+        }
       });
 
       if (!res.ok) return;
@@ -51,24 +54,24 @@ document.addEventListener("DOMContentLoaded", () => {
       console.log("📦 Subscription:", data);
 
       if (data.subscription_status !== "active") {
-        const alert = document.getElementById("alert");
-        if (alert) alert.style.display = "block";
+        const alertBox = document.getElementById("alert");
+        if (alertBox) alertBox.style.display = "block";
       }
     } catch (err) {
       console.warn("⚠️ Falha ao validar assinatura:", err.message);
+      // NÃO derruba o dashboard
     }
-  })();
+  }
+
+  checkSubscription();
 
   // ==========================================
-  // MENU
+  // FUNÇÕES GLOBAIS (HTML)
   // ==========================================
   window.showSection = showSection;
 
-  // ==========================================
-  // LOGOUT
-  // ==========================================
   window.logout = function () {
     localStorage.removeItem("token");
     location.replace("/");
   };
-});
+})();
