@@ -1,21 +1,19 @@
 // ==========================================
-// dashboard.js — Aldra Dashboard (ESTÁVEL)
+// dashboard.js — Aldra Dashboard (ANTI-LOOP)
 // ==========================================
 
 (function () {
   console.log("🚀 Dashboard carregado");
 
-  // ==========================================
-  // TOKEN
-  // ==========================================
   const token = localStorage.getItem("token");
+
   if (!token) {
     location.replace("/");
     return;
   }
 
   // ==========================================
-  // SEÇÕES (IDs reais do HTML)
+  // SEÇÕES
   // ==========================================
   const sections = ["sectionChat", "sectionCRM"];
 
@@ -27,18 +25,12 @@
 
     const active = document.getElementById("section" + name);
     if (active) active.style.display = "block";
-
-    // 👉 carrega CRM somente ao entrar
-    if (name === "CRM" && typeof carregarClientes === "function") {
-      carregarClientes();
-    }
   }
 
-  // seção inicial
   showSection("Chat");
 
   // ==========================================
-  // ASSINATURA (SEM REDIRECT / SEM LOOP)
+  // ASSINATURA / VALIDA TOKEN
   // ==========================================
   async function checkSubscription() {
     try {
@@ -48,25 +40,31 @@
         }
       });
 
+      if (res.status === 401) {
+        console.warn("🔒 Token inválido, limpando sessão");
+        localStorage.removeItem("token");
+        location.replace("/");
+        return;
+      }
+
       if (!res.ok) return;
 
       const data = await res.json();
-      console.log("📦 Subscription:", data);
 
       if (data.subscription_status !== "active") {
         const alertBox = document.getElementById("alert");
         if (alertBox) alertBox.style.display = "block";
       }
+
     } catch (err) {
-      console.warn("⚠️ Falha ao validar assinatura:", err.message);
-      // NÃO derruba o dashboard
+      console.warn("⚠️ Erro ao validar assinatura:", err.message);
     }
   }
 
   checkSubscription();
 
   // ==========================================
-  // FUNÇÕES GLOBAIS (HTML)
+  // FUNÇÕES GLOBAIS
   // ==========================================
   window.showSection = showSection;
 
