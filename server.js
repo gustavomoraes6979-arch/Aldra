@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (AUTH + ASSINATURA + CRM + IA GROQ) — NODE 22 SAFE
+// Aldra — server.js (AUTH + ASSINATURA + CRM + PROTEÇÃO REAL)
 // =======================================================================
 
 import express from "express";
@@ -10,7 +10,6 @@ import sqlite3 from "sqlite3";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { fileURLToPath } from "url";
-import fetch from "node-fetch";
 
 dotenv.config();
 
@@ -19,11 +18,6 @@ dotenv.config();
 // =======================================================================
 if (!process.env.JWT_SECRET) {
   console.error("❌ JWT_SECRET não definido");
-  process.exit(1);
-}
-
-if (!process.env.GROQ_API_KEY) {
-  console.error("❌ GROQ_API_KEY não definido");
   process.exit(1);
 }
 
@@ -44,9 +38,6 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// 👉 ESTÁTICOS SEMPRE PRIMEIRO (CRÍTICO)
-app.use(express.static(PUBLIC_DIR));
 
 // =======================================================================
 // DATABASE
@@ -92,6 +83,7 @@ db.serialize(() => {
 // =======================================================================
 function auth(req, res, next) {
   const authHeader = req.headers.authorization;
+
   if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Token ausente" });
   }
@@ -108,7 +100,27 @@ function auth(req, res, next) {
 }
 
 // =======================================================================
-// ASSINATURA (SEM REDIRECT)
+// PROTEÇÃO DE ROTA FRONTEND (NOVO)
+// =======================================================================
+function protectDashboard(req, res, next) {
+  const token =
+    req.headers.authorization?.replace("Bearer ", "") ||
+    req.query.token;
+
+  if (!token) {
+    return res.redirect("/");
+  }
+
+  try {
+    jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch {
+    return res.redirect("/");
+  }
+}
+
+// =======================================================================
+// ASSINATURA
 // =======================================================================
 function assinaturaAtiva(req, res, next) {
   db.get(
@@ -145,7 +157,7 @@ app.post("/auth/register", (req, res) => {
       if (err) return res.status(400).json({ error: "Email já existe" });
 
       db.run(
-        `INSERT OR IGNORE INTO subscriptions (user_id,status)
+        `INSERT INTO subscriptions (user_id,status)
          VALUES (?, 'pending')`,
         [this.lastID]
       );
@@ -160,14 +172,10 @@ app.post("/auth/login", (req, res) => {
 
   db.get(`SELECT * FROM users WHERE email=?`, [email], (_, u) => {
     if (!u) return res.status(404).json({ error: "Usuário não encontrado" });
-    if (!bcrypt.compareSync(password, u.password))
-      return res.status(401).json({ error: "Senha incorreta" });
 
-    db.run(
-      `INSERT OR IGNORE INTO subscriptions (user_id,status)
-       VALUES (?, 'pending')`,
-      [u.id]
-    );
+    if (!bcrypt.compareSync(password, u.password)) {
+      return res.status(401).json({ error: "Senha incorreta" });
+    }
 
     const token = jwt.sign({ id: u.id }, process.env.JWT_SECRET, {
       expiresIn: "7d"
@@ -178,22 +186,23 @@ app.post("/auth/login", (req, res) => {
 });
 
 // =======================================================================
-// ASSINATURA
+// SUBSCRIPTION STATUS
 // =======================================================================
 app.get("/subscription/status", auth, (req, res) => {
   db.get(
     `SELECT status, expires_at FROM subscriptions WHERE user_id=?`,
     [req.user.id],
-    (_, sub) =>
+    (_, sub) => {
       res.json({
         subscription_status: sub?.status || "pending",
         subscription_expires_at: sub?.expires_at || null
-      })
+      });
+    }
   );
 });
 
 // =======================================================================
-// CRM
+// CRM (PROTEGIDO)
 // =======================================================================
 app.get("/api/crm", auth, assinaturaAtiva, (req, res) => {
   db.all(
@@ -204,19 +213,15 @@ app.get("/api/crm", auth, assinaturaAtiva, (req, res) => {
 });
 
 app.post("/api/crm", auth, assinaturaAtiva, (req, res) => {
-  const name = req.body.name || req.body.nome;
-  const email = req.body.email;
-  const phone = req.body.phone || req.body.telefone || "";
+  const { name, email, phone = "" } = req.body;
 
   if (!name || !email) {
     return res.status(400).json({ error: "Nome e email obrigatórios" });
   }
 
   db.run(
-    `
-    INSERT INTO crm_clients (user_id,name,email,phone)
-    VALUES (?,?,?,?)
-    `,
+    `INSERT INTO crm_clients (user_id,name,email,phone)
+     VALUES (?,?,?,?)`,
     [req.user.id, name, email, phone],
     function () {
       res.json({ success: true, id: this.lastID });
@@ -225,26 +230,27 @@ app.post("/api/crm", auth, assinaturaAtiva, (req, res) => {
 });
 
 // =======================================================================
-// FRONTEND ROUTES (BLINDADO)
+// FRONTEND
 // =======================================================================
 
-// Página inicial
+// Página login
 app.get("/", (_, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
-// Dashboard explícito (🔥 CRÍTICO 🔥)
-app.get("/dashboard.html", (_, res) => {
+// 🔥 DASHBOARD AGORA PROTEGIDO
+app.get("/dashboard", protectDashboard, (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "dashboard.html"));
 });
 
-// Fallback SPA — SOMENTE rotas sem ponto
+// Arquivos estáticos
+app.use(express.static(PUBLIC_DIR));
+
+// Fallback
 app.get(/^[^.]+$/, (_, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
-// =======================================================================
-// START
 // =======================================================================
 app.listen(PORT, () => {
   console.log(`🚀 Aldra ONLINE na porta ${PORT}`);
