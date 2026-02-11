@@ -44,6 +44,8 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// 👉 ESTÁTICOS SEMPRE PRIMEIRO (CRÍTICO)
 app.use(express.static(PUBLIC_DIR));
 
 // =======================================================================
@@ -86,7 +88,7 @@ db.serialize(() => {
 });
 
 // =======================================================================
-// AUTH
+// AUTH MIDDLEWARE
 // =======================================================================
 function auth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -129,6 +131,7 @@ function assinaturaAtiva(req, res, next) {
 // =======================================================================
 app.post("/auth/register", (req, res) => {
   const { name = "", email, password } = req.body;
+
   if (!email || !password) {
     return res.status(400).json({ error: "Dados inválidos" });
   }
@@ -222,17 +225,21 @@ app.post("/api/crm", auth, assinaturaAtiva, (req, res) => {
 });
 
 // =======================================================================
-// FRONTEND — NODE 22 SAFE (SEM "*")
+// FRONTEND ROUTES (BLINDADO)
 // =======================================================================
-app.get("/", (_, res) =>
-  res.sendFile(path.join(PUBLIC_DIR, "index.html"))
-);
 
-// Fallback SPA — regex compatível com Node 22
-app.get(/.*/, (req, res) => {
-  if (req.path.includes(".")) {
-    return res.status(404).end();
-  }
+// Página inicial
+app.get("/", (_, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
+
+// Dashboard explícito (🔥 CRÍTICO 🔥)
+app.get("/dashboard.html", (_, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "dashboard.html"));
+});
+
+// Fallback SPA — SOMENTE rotas sem ponto
+app.get(/^[^.]+$/, (_, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 

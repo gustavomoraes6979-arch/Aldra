@@ -100,6 +100,12 @@
   </div>
 
   <script>
+    // ✅ Se já estiver logado, vai direto pro dashboard
+    const existingToken = localStorage.getItem("token");
+    if (existingToken) {
+      window.location.replace("/dashboard.html");
+    }
+
     let mode = "login";
     let loading = false;
 
@@ -171,7 +177,7 @@
 
         if (mode === "login") {
           localStorage.setItem("token", data.token);
-          window.location.replace("/dashboard");
+          window.location.replace("/dashboard.html");
         } else {
           msg.style.color = "green";
           msg.innerText = "Conta criada com sucesso! Faça login.";

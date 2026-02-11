@@ -1,180 +1,106 @@
-// ============================================
-// CRM.JS — Aldra (SIMPLES, COMPLETO E FUNCIONAL)
-// Compatível com crm.html + server.js atual
-// ============================================
+// ==========================================
+// crm.js — Aldra CRM (NODE 22 + SERVER ATUAL)
+// ==========================================
 
-const token = localStorage.getItem("token");
-if (!token) location.href = "/";
+(function () {
+  console.log("📊 CRM carregado");
 
-const headers = {
-  "Content-Type": "application/json",
-  Authorization: "Bearer " + token
-};
-
-let editId = null;
-
-// ============================================
-// UTIL
-// ============================================
-function escapeHtml(t) {
-  return String(t || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-// ============================================
-// LOAD CLIENTES
-// ============================================
-async function loadClients() {
-  const box = document.getElementById("clients");
-  box.innerHTML = "<i>Carregando clientes...</i>";
-
-  try {
-    const res = await fetch("/api/crm", { headers });
-    const data = await res.json();
-    box.innerHTML = "";
-
-    if (!data.length) {
-      box.innerHTML = "<small>Nenhum cliente cadastrado.</small>";
-      return;
-    }
-
-    data.forEach(c => {
-      const div = document.createElement("div");
-      div.className = "card client";
-      div.innerHTML = `
-        <b>${escapeHtml(c.name)}</b><br>
-        ${escapeHtml(c.email || "")}<br>
-        ${escapeHtml(c.phone || "")}<br>
-        <small>Status: ${escapeHtml(c.status)}</small><br>
-        <small>${escapeHtml(c.notes || "")}</small><br><br>
-
-        <button onclick='openEdit(${JSON.stringify(c)})'>Editar</button>
-        <button class="btn-ai" onclick="aiSuggest(${c.id})">IA 💡</button>
-        <button class="btn-danger" onclick="deleteClient(${c.id})">Excluir</button>
-      `;
-      box.appendChild(div);
-    });
-
-  } catch (e) {
-    box.innerHTML = "<span style='color:red'>Erro ao carregar CRM</span>";
-  }
-}
-
-// ============================================
-// CREATE CLIENT
-// ============================================
-async function createClient() {
-  const body = {
-    name: name.value.trim(),
-    email: email.value.trim(),
-    phone: phone.value.trim(),
-    status: status.value,
-    notes: notes.value.trim()
-  };
-
-  if (!body.name) {
-    msg.style.color = "red";
-    msg.innerText = "Nome é obrigatório";
+  const token = localStorage.getItem("token");
+  if (!token) {
+    location.replace("/");
     return;
   }
 
-  try {
-    const res = await fetch("/api/crm", {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body)
-    });
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: "Bearer " + token
+  };
 
-    if (!res.ok) throw new Error();
+  const nomeInput = document.getElementById("crmNome");
+  const emailInput = document.getElementById("crmEmail");
+  const telefoneInput = document.getElementById("crmTelefone");
+  const lista = document.getElementById("crmLista");
 
-    msg.style.color = "green";
-    msg.innerText = "Cliente salvo com sucesso!";
+  // ==========================================
+  // CARREGAR CLIENTES
+  // ==========================================
+  async function carregarClientes() {
+    lista.innerHTML = "<tr><td colspan='3'>Carregando...</td></tr>";
 
-    name.value = "";
-    email.value = "";
-    phone.value = "";
-    notes.value = "";
-    status.value = "lead";
+    try {
+      const res = await fetch("/api/crm", { headers });
 
-    loadClients();
+      if (!res.ok) {
+        lista.innerHTML =
+          "<tr><td colspan='3'>Assinatura inativa</td></tr>";
+        return;
+      }
 
-  } catch {
-    msg.style.color = "red";
-    msg.innerText = "Erro ao salvar cliente";
+      const clientes = await res.json();
+      lista.innerHTML = "";
+
+      if (!clientes.length) {
+        lista.innerHTML =
+          "<tr><td colspan='3'>Nenhum cliente cadastrado</td></tr>";
+        return;
+      }
+
+      clientes.forEach(c => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${c.name}</td>
+          <td>${c.email}</td>
+          <td>${c.phone || "-"}</td>
+        `;
+        lista.appendChild(tr);
+      });
+
+    } catch (err) {
+      console.error(err);
+      lista.innerHTML =
+        "<tr><td colspan='3'>Erro ao carregar CRM</td></tr>";
+    }
   }
-}
 
-// ============================================
-// EDITAR
-// ============================================
-function openEdit(c) {
-  editId = c.id;
-  eName.value = c.name;
-  eEmail.value = c.email || "";
-  ePhone.value = c.phone || "";
-  eStatus.value = c.status;
-  eNotes.value = c.notes || "";
-  editModal.style.display = "flex";
-}
+  // ==========================================
+  // SALVAR CLIENTE
+  // ==========================================
+  window.salvarCliente = async function () {
+    const name = nomeInput.value.trim();
+    const email = emailInput.value.trim();
+    const phone = telefoneInput.value.trim();
 
-function closeEdit() {
-  editModal.style.display = "none";
-}
+    if (!name || !email) {
+      alert("Nome e email são obrigatórios");
+      return;
+    }
 
-async function saveEdit() {
-  try {
-    await fetch("/api/crm/" + editId, {
-      method: "PUT",
-      headers,
-      body: JSON.stringify({
-        name: eName.value.trim(),
-        email: eEmail.value.trim(),
-        phone: ePhone.value.trim(),
-        status: eStatus.value,
-        notes: eNotes.value.trim()
-      })
-    });
+    try {
+      const res = await fetch("/api/crm", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name, email, phone })
+      });
 
-    closeEdit();
-    loadClients();
+      if (!res.ok) {
+        alert("Erro ao salvar cliente");
+        return;
+      }
 
-  } catch {
-    alert("Erro ao editar cliente");
-  }
-}
+      nomeInput.value = "";
+      emailInput.value = "";
+      telefoneInput.value = "";
 
-// ============================================
-// DELETE
-// ============================================
-async function deleteClient(id) {
-  if (!confirm("Excluir este cliente?")) return;
+      carregarClientes();
 
-  try {
-    await fetch("/api/crm/" + id, {
-      method: "DELETE",
-      headers
-    });
+    } catch {
+      alert("Erro de conexão com o servidor");
+    }
+  };
 
-    loadClients();
-  } catch {
-    alert("Erro ao excluir cliente");
-  }
-}
+  // ==========================================
+  // EXPOR PARA O DASHBOARD
+  // ==========================================
+  window.carregarClientes = carregarClientes;
 
-// ============================================
-// IA
-// ============================================
-async function aiSuggest(id) {
-  try {
-    const res = await fetch("/api/crm/ai/" + id, { headers });
-    const data = await res.json();
-    alert("💡 Sugestão da IA:\n\n" + (data.text || "Sem resposta"));
-  } catch {
-    alert("Erro ao consultar IA");
-  }
-}
-
-// INIT
-loadClients();
+})();
