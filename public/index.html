@@ -100,11 +100,32 @@
   </div>
 
   <script>
-    // ✅ Se já estiver logado, vai direto pro dashboard
-    const existingToken = localStorage.getItem("token");
-    if (existingToken) {
-      window.location.replace("/dashboard.html");
+    // 🔐 VALIDA TOKEN ANTES DE REDIRECIONAR
+    async function checkExistingSession() {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      try {
+        const res = await fetch("/subscription/status", {
+          headers: {
+            Authorization: "Bearer " + token
+          }
+        });
+
+        if (!res.ok) {
+          localStorage.removeItem("token");
+          return;
+        }
+
+        // Token válido → vai para dashboard
+        window.location.replace("/dashboard.html");
+
+      } catch {
+        localStorage.removeItem("token");
+      }
     }
+
+    checkExistingSession();
 
     let mode = "login";
     let loading = false;
