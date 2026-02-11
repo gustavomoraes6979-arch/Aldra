@@ -62,6 +62,7 @@
 
     .menu {
       display: flex;
+      flex-wrap: wrap;
       gap: 12px;
       padding: 14px 20px;
       background: var(--white);
@@ -140,12 +141,39 @@
   ⚠️ Sua assinatura ainda não está ativa. Algumas funções podem ficar limitadas.
 </div>
 
+<!-- MENU DE FERRAMENTAS -->
 <div class="menu">
+  <button onclick="showSection('PDF')">📄 Análise de PDF</button>
+  <button onclick="showSection('Contrato')">📝 Gerar Contrato</button>
+  <button onclick="showSection('Cobranca')">💳 Cobrança</button>
+  <button onclick="showSection('Relatorios')">📊 Relatórios</button>
   <button onclick="showSection('Chat')">💬 Chat IA</button>
-  <button onclick="showSection('CRM')">📊 CRM</button>
+  <button onclick="showSection('CRM')">👥 CRM</button>
 </div>
 
-<div id="sectionChat" class="section active">
+<!-- SEÇÕES -->
+
+<div id="sectionPDF" class="section">
+  <h2>📄 Análise de PDF</h2>
+  <p>Envie um PDF para análise inteligente.</p>
+</div>
+
+<div id="sectionContrato" class="section">
+  <h2>📝 Gerador de Contratos</h2>
+  <p>Criação automática de contratos personalizados.</p>
+</div>
+
+<div id="sectionCobranca" class="section">
+  <h2>💳 Cobrança (PIX / Boleto)</h2>
+  <p>Geração de cobranças automatizadas.</p>
+</div>
+
+<div id="sectionRelatorios" class="section">
+  <h2>📊 Relatórios</h2>
+  <p>Relatórios administrativos e financeiros.</p>
+</div>
+
+<div id="sectionChat" class="section">
   <h2>💬 Chat Inteligente</h2>
   <textarea readonly placeholder="Resposta da IA..."></textarea>
   <input placeholder="Digite sua mensagem...">
@@ -153,7 +181,7 @@
 </div>
 
 <div id="sectionCRM" class="section">
-  <h2>📊 CRM — Clientes</h2>
+  <h2>👥 CRM — Clientes</h2>
 
   <h3>Novo Cliente</h3>
   <input id="crmNome" placeholder="Nome do cliente">
@@ -174,7 +202,7 @@
   </table>
 </div>
 
-<!-- JS carregado com defer para evitar loop -->
+<!-- JS -->
 <script src="/js/dashboard.js" defer></script>
 
 </body>

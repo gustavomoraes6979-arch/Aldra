@@ -1,38 +1,63 @@
 // ==========================================
-// dashboard.js — Aldra Dashboard (ANTI-LOOP)
+// dashboard.js — Aldra Dashboard (ESTÁVEL FINAL)
 // ==========================================
 
 (function () {
-  console.log("🚀 Dashboard carregado");
+  console.log("🚀 Dashboard inicializando...");
 
+  // ==========================================
+  // TOKEN — BLOQUEIO TOTAL SEM LOGIN
+  // ==========================================
   const token = localStorage.getItem("token");
 
   if (!token) {
+    console.warn("🔒 Sem token, redirecionando para login");
     location.replace("/");
     return;
   }
 
   // ==========================================
-  // SEÇÕES
+  // SEÇÕES DISPONÍVEIS
   // ==========================================
-  const sections = ["sectionChat", "sectionCRM"];
+  const sections = [
+    "sectionPDF",
+    "sectionContrato",
+    "sectionCobranca",
+    "sectionRelatorios",
+    "sectionChat",
+    "sectionCRM"
+  ];
 
-  function showSection(name) {
+  function hideAllSections() {
     sections.forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.style.display = "none";
+      if (el) el.classList.remove("active");
     });
-
-    const active = document.getElementById("section" + name);
-    if (active) active.style.display = "block";
   }
 
-  showSection("Chat");
+  function showSection(name) {
+    hideAllSections();
+
+    const sectionId = "section" + name;
+    const el = document.getElementById(sectionId);
+
+    if (!el) {
+      console.warn("⚠️ Seção não encontrada:", sectionId);
+      return;
+    }
+
+    el.classList.add("active");
+
+    // Carrega CRM apenas quando necessário
+    if (name === "CRM" && typeof loadClients === "function") {
+      loadClients();
+    }
+  }
 
   // ==========================================
-  // ASSINATURA / VALIDA TOKEN
+  // VALIDA TOKEN + ASSINATURA
   // ==========================================
-  async function checkSubscription() {
+  async function validateSession() {
     try {
       const res = await fetch("/subscription/status", {
         headers: {
@@ -40,28 +65,38 @@
         }
       });
 
+      // Token inválido → expulsa imediatamente
       if (res.status === 401) {
-        console.warn("🔒 Token inválido, limpando sessão");
+        console.warn("❌ Token inválido ou expirado");
         localStorage.removeItem("token");
         location.replace("/");
         return;
       }
 
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.warn("⚠️ Falha ao validar sessão");
+        return;
+      }
 
       const data = await res.json();
+      console.log("📦 Status assinatura:", data);
 
       if (data.subscription_status !== "active") {
         const alertBox = document.getElementById("alert");
         if (alertBox) alertBox.style.display = "block";
       }
 
+      // Só entra no dashboard depois de validar
+      showSection("Chat");
+
     } catch (err) {
-      console.warn("⚠️ Erro ao validar assinatura:", err.message);
+      console.error("❌ Erro crítico de sessão:", err.message);
+      localStorage.removeItem("token");
+      location.replace("/");
     }
   }
 
-  checkSubscription();
+  validateSession();
 
   // ==========================================
   // FUNÇÕES GLOBAIS
@@ -72,4 +107,5 @@
     localStorage.removeItem("token");
     location.replace("/");
   };
+
 })();
