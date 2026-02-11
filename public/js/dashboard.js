@@ -1,23 +1,77 @@
 // ==========================================
-// dashboard.js — Aldra Dashboard (ESTÁVEL FINAL)
+// dashboard.js — Aldra Dashboard (PROTEÇÃO REAL)
 // ==========================================
 
 (function () {
   console.log("🚀 Dashboard inicializando...");
 
-  // ==========================================
-  // TOKEN — BLOQUEIO TOTAL SEM LOGIN
-  // ==========================================
   const token = localStorage.getItem("token");
 
+  // ==========================================
+  // BLOQUEIO TOTAL SEM TOKEN
+  // ==========================================
   if (!token) {
-    console.warn("🔒 Sem token, redirecionando para login");
-    location.replace("/");
+    console.warn("🔒 Token ausente. Redirecionando...");
+    window.location.href = "/";
     return;
   }
 
   // ==========================================
-  // SEÇÕES DISPONÍVEIS
+  // ELEMENTOS
+  // ==========================================
+  const alertBox = document.getElementById("alert");
+  const crmLista = document.getElementById("crmLista");
+
+  let subscriptionActive = false;
+
+  // ==========================================
+  // VALIDAR SESSÃO
+  // ==========================================
+  async function validateSession() {
+    try {
+      const res = await fetch("/subscription/status", {
+        headers: {
+          Authorization: "Bearer " + token
+        }
+      });
+
+      // Token inválido ou expirado
+      if (res.status === 401) {
+        forceLogout();
+        return;
+      }
+
+      if (!res.ok) {
+        console.warn("Erro ao validar assinatura");
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data.subscription_status === "active") {
+        subscriptionActive = true;
+        if (alertBox) alertBox.style.display = "none";
+      } else {
+        subscriptionActive = false;
+        if (alertBox) alertBox.style.display = "block";
+      }
+
+    } catch (err) {
+      console.error("Erro crítico:", err);
+      forceLogout();
+    }
+  }
+
+  // ==========================================
+  // LOGOUT FORÇADO
+  // ==========================================
+  function forceLogout() {
+    localStorage.removeItem("token");
+    window.location.href = "/";
+  }
+
+  // ==========================================
+  // SEÇÕES
   // ==========================================
   const sections = [
     "sectionPDF",
@@ -41,71 +95,122 @@
     const sectionId = "section" + name;
     const el = document.getElementById(sectionId);
 
-    if (!el) {
-      console.warn("⚠️ Seção não encontrada:", sectionId);
+    if (!el) return;
+
+    // Bloqueia CRM se assinatura não ativa
+    if (name === "CRM" && !subscriptionActive) {
+      alert("Sua assinatura precisa estar ativa para usar o CRM.");
       return;
     }
 
     el.classList.add("active");
 
-    // Carrega CRM apenas quando necessário
-    if (name === "CRM" && typeof loadClients === "function") {
+    if (name === "CRM") {
       loadClients();
     }
   }
 
+  window.showSection = showSection;
+
   // ==========================================
-  // VALIDA TOKEN + ASSINATURA
+  // CRM
   // ==========================================
-  async function validateSession() {
+  async function loadClients() {
+    if (!subscriptionActive) return;
+
     try {
-      const res = await fetch("/subscription/status", {
+      const res = await fetch("/api/crm", {
         headers: {
           Authorization: "Bearer " + token
         }
       });
 
-      // Token inválido → expulsa imediatamente
       if (res.status === 401) {
-        console.warn("❌ Token inválido ou expirado");
-        localStorage.removeItem("token");
-        location.replace("/");
-        return;
-      }
-
-      if (!res.ok) {
-        console.warn("⚠️ Falha ao validar sessão");
+        forceLogout();
         return;
       }
 
       const data = await res.json();
-      console.log("📦 Status assinatura:", data);
 
-      if (data.subscription_status !== "active") {
-        const alertBox = document.getElementById("alert");
-        if (alertBox) alertBox.style.display = "block";
-      }
+      crmLista.innerHTML = "";
 
-      // Só entra no dashboard depois de validar
-      showSection("Chat");
+      data.forEach(client => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${client.name}</td>
+          <td>${client.email}</td>
+          <td>${client.phone || ""}</td>
+        `;
+        crmLista.appendChild(row);
+      });
 
     } catch (err) {
-      console.error("❌ Erro crítico de sessão:", err.message);
-      localStorage.removeItem("token");
-      location.replace("/");
+      console.error("Erro ao carregar CRM:", err);
     }
   }
 
-  validateSession();
+  window.salvarCliente = async function () {
+    if (!subscriptionActive) {
+      alert("Assinatura necessária.");
+      return;
+    }
 
-  // ==========================================
-  // FUNÇÕES GLOBAIS
-  // ==========================================
-  window.showSection = showSection;
+    const nome = document.getElementById("crmNome").value.trim();
+    const email = document.getElementById("crmEmail").value.trim();
+    const telefone = document.getElementById("crmTelefone").value.trim();
 
-  window.logout = function () {
-    localStorage.removeItem("token");
-    location.replace("/");
+    if (!nome || !email) {
+      alert("Nome e email são obrigatórios.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/crm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token
+        },
+        body: JSON.stringify({
+          name: nome,
+          email: email,
+          phone: telefone
+        })
+      });
+
+      if (res.status === 401) {
+        forceLogout();
+        return;
+      }
+
+      if (!res.ok) {
+        alert("Erro ao salvar cliente.");
+        return;
+      }
+
+      document.getElementById("crmNome").value = "";
+      document.getElementById("crmEmail").value = "";
+      document.getElementById("crmTelefone").value = "";
+
+      loadClients();
+
+    } catch (err) {
+      console.error("Erro ao salvar cliente:", err);
+    }
   };
+
+  // ==========================================
+  // LOGOUT
+  // ==========================================
+  window.logout = function () {
+    forceLogout();
+  };
+
+  // ==========================================
+  // INICIALIZAÇÃO
+  // ==========================================
+  validateSession().then(() => {
+    showSection("PDF");
+  });
 
 })();

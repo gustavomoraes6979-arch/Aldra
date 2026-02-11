@@ -100,12 +100,10 @@ function auth(req, res, next) {
 }
 
 // =======================================================================
-// PROTEÇÃO DE ROTA FRONTEND (NOVO)
+// PROTEÇÃO REAL DO DASHBOARD
 // =======================================================================
 function protectDashboard(req, res, next) {
-  const token =
-    req.headers.authorization?.replace("Bearer ", "") ||
-    req.query.token;
+  const token = req.query.token;
 
   if (!token) {
     return res.redirect("/");
@@ -233,21 +231,21 @@ app.post("/api/crm", auth, assinaturaAtiva, (req, res) => {
 // FRONTEND
 // =======================================================================
 
-// Página login
+// Login
 app.get("/", (_, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
-// 🔥 DASHBOARD AGORA PROTEGIDO
-app.get("/dashboard", protectDashboard, (req, res) => {
+// 🔐 Dashboard protegido corretamente
+app.get("/dashboard.html", protectDashboard, (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "dashboard.html"));
 });
 
-// Arquivos estáticos
+// Arquivos estáticos (DEPOIS da proteção)
 app.use(express.static(PUBLIC_DIR));
 
-// Fallback
-app.get(/^[^.]+$/, (_, res) => {
+// Fallback SPA
+app.get("*", (_, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
