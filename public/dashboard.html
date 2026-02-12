@@ -54,10 +54,24 @@
       color: #856404;
       border: 1px solid #ffeeba;
       margin: 20px;
-      padding: 14px 20px;
+      padding: 20px;
       border-radius: var(--radius);
       font-weight: 600;
       display: none;
+    }
+
+    .pix-box {
+      margin-top: 20px;
+      background: white;
+      padding: 20px;
+      border-radius: var(--radius);
+      border: 1px solid var(--cinza-borda);
+      display: none;
+    }
+
+    .pix-box img {
+      width: 220px;
+      margin-top: 10px;
     }
 
     .menu {
@@ -138,10 +152,18 @@
 </header>
 
 <div id="alert" class="alert">
-  ⚠️ Sua assinatura ainda não está ativa.
+  ⚠️ Sua assinatura não está ativa.<br><br>
+  <button class="action" onclick="gerarPix()">Assinar Plano Mensal — R$ 70,00</button>
+
+  <div class="pix-box" id="pixBox">
+    <h3>📲 Escaneie o QR Code</h3>
+    <img id="qrImage" />
+    <p><strong>Copia e Cola:</strong></p>
+    <textarea id="pixCode" readonly></textarea>
+  </div>
 </div>
 
-<div class="menu">
+<div class="menu" id="menu">
   <button onclick="showSection('PDF')">📄 Análise de PDF</button>
   <button onclick="showSection('Contrato')">📝 Gerar Contrato</button>
   <button onclick="showSection('Cobranca')">💳 Cobrança</button>
@@ -150,27 +172,11 @@
   <button onclick="showSection('CRM')">👥 CRM</button>
 </div>
 
-<!-- SEÇÕES -->
-
-<div id="sectionPDF" class="section">
-  <h2>📄 Análise de PDF</h2>
-</div>
-
-<div id="sectionContrato" class="section">
-  <h2>📝 Gerador de Contratos</h2>
-</div>
-
-<div id="sectionCobranca" class="section">
-  <h2>💳 Cobrança</h2>
-</div>
-
-<div id="sectionRelatorios" class="section">
-  <h2>📊 Relatórios</h2>
-</div>
-
-<div id="sectionChat" class="section">
-  <h2>💬 Chat Inteligente</h2>
-</div>
+<div id="sectionPDF" class="section"><h2>📄 Análise de PDF</h2></div>
+<div id="sectionContrato" class="section"><h2>📝 Gerador de Contratos</h2></div>
+<div id="sectionCobranca" class="section"><h2>💳 Cobrança</h2></div>
+<div id="sectionRelatorios" class="section"><h2>📊 Relatórios</h2></div>
+<div id="sectionChat" class="section"><h2>💬 Chat Inteligente</h2></div>
 
 <div id="sectionCRM" class="section">
   <h2>👥 CRM</h2>
@@ -178,7 +184,6 @@
   <input id="crmEmail" placeholder="E-mail">
   <input id="crmTelefone" placeholder="Telefone">
   <button class="action" onclick="salvarCliente()">Salvar Cliente</button>
-
   <table>
     <thead>
       <tr>
@@ -192,49 +197,70 @@
 </div>
 
 <script>
-  // ===============================
-  // 🔐 PROTEÇÃO DO DASHBOARD
-  // ===============================
+const token = localStorage.getItem("token");
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const tokenFromUrl = urlParams.get("token");
+if (!token) {
+  window.location.href = "/";
+}
 
-  if (tokenFromUrl) {
-    localStorage.setItem("token", tokenFromUrl);
-    window.history.replaceState({}, document.title, "/dashboard.html");
+// =========================
+// VERIFICAR ASSINATURA
+// =========================
+async function verificarAssinatura() {
+  const res = await fetch("/subscription/status", {
+    headers: { Authorization: "Bearer " + token }
+  });
+
+  const data = await res.json();
+
+  if (data.subscription_status !== "active") {
+    document.getElementById("alert").style.display = "block";
+    document.getElementById("menu").style.display = "none";
   }
+}
 
-  const token = localStorage.getItem("token");
+verificarAssinatura();
 
-  if (!token) {
-    window.location.href = "/";
-  }
+// =========================
+// GERAR PIX
+// =========================
+async function gerarPix() {
+  const res = await fetch("/api/create-pix", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + token
+    }
+  });
 
-  // ===============================
-  // LOGOUT
-  // ===============================
+  const data = await res.json();
 
-  function logout() {
-    localStorage.removeItem("token");
-    window.location.href = "/";
-  }
+  document.getElementById("pixBox").style.display = "block";
+  document.getElementById("qrImage").src =
+    "data:image/png;base64," + data.qr_code_base64;
+  document.getElementById("pixCode").value = data.qr_code;
+}
 
-  // ===============================
-  // MENU
-  // ===============================
+// =========================
+// LOGOUT
+// =========================
+function logout() {
+  localStorage.removeItem("token");
+  window.location.href = "/";
+}
 
-  function showSection(name) {
-    document.querySelectorAll(".section").forEach(sec =>
-      sec.classList.remove("active")
-    );
+// =========================
+// MENU
+// =========================
+function showSection(name) {
+  document.querySelectorAll(".section").forEach(sec =>
+    sec.classList.remove("active")
+  );
+  document.getElementById("section" + name).classList.add("active");
+}
 
-    document.getElementById("section" + name).classList.add("active");
-  }
-
-  showSection("PDF");
+showSection("PDF");
 </script>
-
-<script src="/js/dashboard.js"></script>
 
 </body>
 </html>

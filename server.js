@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (AUTH + ASSINATURA + CRM + EXPRESS 5 SAFE)
+// Aldra — server.js (AUTH + ASSINATURA + CRM + PIX + WEBHOOK)
 // =======================================================================
 
 import express from "express";
@@ -9,6 +9,7 @@ import dotenv from "dotenv";
 import sqlite3 from "sqlite3";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import mercadopago from "mercadopago";
 import { fileURLToPath } from "url";
 
 dotenv.config();
@@ -21,6 +22,18 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
+if (!process.env.MP_ACCESS_TOKEN) {
+  console.error("❌ MP_ACCESS_TOKEN não definido");
+  process.exit(1);
+}
+
+// =======================================================================
+// MERCADO PAGO CONFIG
+// =======================================================================
+mercadopago.configure({
+  access_token: process.env.MP_ACCESS_TOKEN
+});
+
 // =======================================================================
 // PATHS
 // =======================================================================
@@ -28,7 +41,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.join(__dirname, "public");
 
-// =======================================================================
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -166,6 +178,64 @@ app.post("/auth/login", (req, res) => {
 });
 
 // =======================================================================
+// GERAR PIX — PLANO R$70
+// =======================================================================
+app.post("/api/create-pix", auth, async (req, res) => {
+  try {
+    const payment = await mercadopago.payment.create({
+      transaction_amount: 70,
+      description: "Plano Mensal Aldra",
+      payment_method_id: "pix",
+      payer: {
+        email: req.user.id + "@aldra.com"
+      },
+      notification_url: `${process.env.BASE_URL}/api/webhook`
+    });
+
+    res.json({
+      qr_code: payment.body.point_of_interaction.transaction_data.qr_code,
+      qr_code_base64:
+        payment.body.point_of_interaction.transaction_data.qr_code_base64,
+      payment_id: payment.body.id
+    });
+  } catch (error) {
+    console.error("Erro ao gerar PIX:", error);
+    res.status(500).json({ error: "Erro ao gerar PIX" });
+  }
+});
+
+// =======================================================================
+// WEBHOOK MERCADO PAGO
+// =======================================================================
+app.post("/api/webhook", async (req, res) => {
+  try {
+    const paymentId = req.body?.data?.id;
+
+    if (!paymentId) return res.sendStatus(200);
+
+    const payment = await mercadopago.payment.findById(paymentId);
+
+    if (payment.body.status === "approved") {
+      const userId = parseInt(payment.body.payer.email.split("@")[0]);
+
+      db.run(
+        `UPDATE subscriptions SET status='active',
+         expires_at=datetime('now','+30 days')
+         WHERE user_id=?`,
+        [userId]
+      );
+
+      console.log("✅ Assinatura ativada para usuário", userId);
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Erro webhook:", err);
+    res.sendStatus(500);
+  }
+});
+
+// =======================================================================
 // SUBSCRIPTION STATUS
 // =======================================================================
 app.get("/subscription/status", auth, (req, res) => {
@@ -182,7 +252,7 @@ app.get("/subscription/status", auth, (req, res) => {
 });
 
 // =======================================================================
-// CRM (PROTEGIDO)
+// CRM
 // =======================================================================
 app.get("/api/crm", auth, assinaturaAtiva, (req, res) => {
   db.all(
@@ -195,16 +265,12 @@ app.get("/api/crm", auth, assinaturaAtiva, (req, res) => {
 app.post("/api/crm", auth, assinaturaAtiva, (req, res) => {
   const { name, email, phone = "" } = req.body;
 
-  if (!name || !email) {
-    return res.status(400).json({ error: "Nome e email obrigatórios" });
-  }
-
   db.run(
     `INSERT INTO crm_clients (user_id,name,email,phone)
      VALUES (?,?,?,?)`,
     [req.user.id, name, email, phone],
     function () {
-      res.json({ success: true, id: this.lastID });
+      res.json({ success: true });
     }
   );
 });
@@ -212,16 +278,12 @@ app.post("/api/crm", auth, assinaturaAtiva, (req, res) => {
 // =======================================================================
 // FRONTEND
 // =======================================================================
-
-// Página login
 app.get("/", (_, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
-// Arquivos estáticos
 app.use(express.static(PUBLIC_DIR));
 
-// Fallback compatível com Express 5
 app.use((req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
