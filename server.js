@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (AUTH + ASSINATURA + CRM + PIX + WEBHOOK)
+// Aldra — server.js (AUTH + ASSINATURA + CRM + PIX v2 + WEBHOOK)
 // =======================================================================
 
 import express from "express";
@@ -9,7 +9,7 @@ import dotenv from "dotenv";
 import sqlite3 from "sqlite3";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import mercadopago from "mercadopago";
+import { MercadoPagoConfig, Payment } from "mercadopago";
 import { fileURLToPath } from "url";
 
 dotenv.config();
@@ -27,12 +27,19 @@ if (!process.env.MP_ACCESS_TOKEN) {
   process.exit(1);
 }
 
+if (!process.env.BASE_URL) {
+  console.error("❌ BASE_URL não definido");
+  process.exit(1);
+}
+
 // =======================================================================
-// MERCADO PAGO CONFIG
+// MERCADO PAGO V2 CONFIG
 // =======================================================================
-mercadopago.configure({
-  access_token: process.env.MP_ACCESS_TOKEN
+const client = new MercadoPagoConfig({
+  accessToken: process.env.MP_ACCESS_TOKEN
 });
+
+const payment = new Payment(client);
 
 // =======================================================================
 // PATHS
@@ -178,26 +185,30 @@ app.post("/auth/login", (req, res) => {
 });
 
 // =======================================================================
-// GERAR PIX — PLANO R$70
+// GERAR PIX — PLANO FIXO R$70
 // =======================================================================
 app.post("/api/create-pix", auth, async (req, res) => {
   try {
-    const payment = await mercadopago.payment.create({
-      transaction_amount: 70,
-      description: "Plano Mensal Aldra",
-      payment_method_id: "pix",
-      payer: {
-        email: req.user.id + "@aldra.com"
-      },
-      notification_url: `${process.env.BASE_URL}/api/webhook`
+    const response = await payment.create({
+      body: {
+        transaction_amount: 70,
+        description: "Plano Mensal Aldra",
+        payment_method_id: "pix",
+        payer: {
+          email: req.user.id + "@aldra.com"
+        },
+        notification_url: `${process.env.BASE_URL}/api/webhook`
+      }
     });
 
     res.json({
-      qr_code: payment.body.point_of_interaction.transaction_data.qr_code,
+      qr_code:
+        response.point_of_interaction.transaction_data.qr_code,
       qr_code_base64:
-        payment.body.point_of_interaction.transaction_data.qr_code_base64,
-      payment_id: payment.body.id
+        response.point_of_interaction.transaction_data.qr_code_base64,
+      payment_id: response.id
     });
+
   } catch (error) {
     console.error("Erro ao gerar PIX:", error);
     res.status(500).json({ error: "Erro ao gerar PIX" });
@@ -205,21 +216,21 @@ app.post("/api/create-pix", auth, async (req, res) => {
 });
 
 // =======================================================================
-// WEBHOOK MERCADO PAGO
+// WEBHOOK
 // =======================================================================
 app.post("/api/webhook", async (req, res) => {
   try {
     const paymentId = req.body?.data?.id;
-
     if (!paymentId) return res.sendStatus(200);
 
-    const payment = await mercadopago.payment.findById(paymentId);
+    const result = await payment.get({ id: paymentId });
 
-    if (payment.body.status === "approved") {
-      const userId = parseInt(payment.body.payer.email.split("@")[0]);
+    if (result.status === "approved") {
+      const userId = parseInt(result.payer.email.split("@")[0]);
 
       db.run(
-        `UPDATE subscriptions SET status='active',
+        `UPDATE subscriptions 
+         SET status='active',
          expires_at=datetime('now','+30 days')
          WHERE user_id=?`,
         [userId]
