@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (AUTH + ASSINATURA + CRM + PROTEÇÃO REAL)
+// Aldra — server.js (AUTH + ASSINATURA + CRM + EXPRESS 5 SAFE)
 // =======================================================================
 
 import express from "express";
@@ -96,24 +96,6 @@ function auth(req, res, next) {
     next();
   } catch {
     return res.status(401).json({ error: "Token inválido" });
-  }
-}
-
-// =======================================================================
-// PROTEÇÃO REAL DO DASHBOARD
-// =======================================================================
-function protectDashboard(req, res, next) {
-  const token = req.query.token;
-
-  if (!token) {
-    return res.redirect("/");
-  }
-
-  try {
-    jwt.verify(token, process.env.JWT_SECRET);
-    next();
-  } catch {
-    return res.redirect("/");
   }
 }
 
@@ -231,21 +213,16 @@ app.post("/api/crm", auth, assinaturaAtiva, (req, res) => {
 // FRONTEND
 // =======================================================================
 
-// Login
+// Página login
 app.get("/", (_, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
-// 🔐 Dashboard protegido corretamente
-app.get("/dashboard.html", protectDashboard, (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, "dashboard.html"));
-});
-
-// Arquivos estáticos (DEPOIS da proteção)
+// Arquivos estáticos
 app.use(express.static(PUBLIC_DIR));
 
-// Fallback SPA
-app.get("*", (_, res) => {
+// Fallback compatível com Express 5
+app.use((req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
