@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (AUTH + ASSINATURA + CRM + PIX + ADMIN PANEL)
+// Aldra — server.js (PRODUCTION STABLE)
 // =======================================================================
 
 import express from "express";
@@ -94,11 +94,12 @@ db.serialize(() => {
     )
   `);
 
-  // Garante que você seja admin sempre
-  db.run(
-    `UPDATE users SET role='admin' WHERE email=?`,
-    [ADMIN_EMAIL]
-  );
+  // Garante admin sempre
+  db.get(`SELECT * FROM users WHERE email=?`, [ADMIN_EMAIL], (err, user) => {
+    if (!user) return;
+
+    db.run(`UPDATE users SET role='admin' WHERE email=?`, [ADMIN_EMAIL]);
+  });
 });
 
 // =======================================================================
@@ -124,25 +125,9 @@ function auth(req, res, next) {
 
 function adminOnly(req, res, next) {
   if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Acesso restrito ao administrador" });
+    return res.status(403).json({ error: "Acesso restrito" });
   }
   next();
-}
-
-function assinaturaAtiva(req, res, next) {
-  db.get(
-    `SELECT status FROM subscriptions WHERE user_id=?`,
-    [req.user.id],
-    (_, sub) => {
-      if (!sub || sub.status !== "active") {
-        return res.status(403).json({
-          error: "Assinatura inativa",
-          code: "SUBSCRIPTION_INACTIVE"
-        });
-      }
-      next();
-    }
-  );
 }
 
 // =======================================================================
@@ -196,10 +181,9 @@ app.post("/auth/login", (req, res) => {
 });
 
 // =======================================================================
-// ADMIN ROUTES
+// ADMIN
 // =======================================================================
 app.get("/admin/stats", auth, adminOnly, (req, res) => {
-
   db.get(`SELECT COUNT(*) as total FROM users`, [], (_, users) => {
     db.get(`SELECT COUNT(*) as total FROM subscriptions WHERE status='active'`, [], (_, active) => {
       db.get(`SELECT COUNT(*) as total FROM subscriptions WHERE status='pending'`, [], (_, pending) => {
@@ -216,7 +200,6 @@ app.get("/admin/stats", auth, adminOnly, (req, res) => {
       });
     });
   });
-
 });
 
 app.get("/admin/users", auth, adminOnly, (req, res) => {
@@ -266,12 +249,11 @@ app.post("/api/create-pix", auth, async (req, res) => {
 
     res.json({
       qr_code: response.point_of_interaction.transaction_data.qr_code,
-      qr_code_base64: response.point_of_interaction.transaction_data.qr_code_base64,
-      payment_id: response.id
+      qr_code_base64: response.point_of_interaction.transaction_data.qr_code_base64
     });
 
   } catch (error) {
-    console.error("Erro ao gerar PIX:", error);
+    console.error("Erro PIX:", error);
     res.status(500).json({ error: "Erro ao gerar PIX" });
   }
 });
@@ -289,13 +271,12 @@ app.post("/api/webhook", async (req, res) => {
     if (result.status === "approved") {
       const userId = parseInt(result.payer.email.split("@")[0]);
 
-      db.run(
-        `UPDATE subscriptions 
-         SET status='active',
-         expires_at=datetime('now','+30 days')
-         WHERE user_id=?`,
-        [userId]
-      );
+      db.run(`
+        UPDATE subscriptions
+        SET status='active',
+        expires_at=datetime('now','+30 days')
+        WHERE user_id=?
+      `, [userId]);
     }
 
     res.sendStatus(200);
@@ -305,11 +286,15 @@ app.post("/api/webhook", async (req, res) => {
 });
 
 // =======================================================================
+// STATIC + FALLBACK (EXPRESS 4 SAFE)
+// =======================================================================
 app.use(express.static(PUBLIC_DIR));
-app.get("*", (_, res) => {
+
+app.get("/*", (_, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
+// =======================================================================
 app.listen(PORT, () => {
   console.log(`🚀 Aldra ONLINE na porta ${PORT}`);
 });
