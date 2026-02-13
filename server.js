@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (AUTH + ASSINATURA + CRM + PIX v2 + WEBHOOK)
+// Aldra — server.js (AUTH + ASSINATURA + CRM + PIX + ADMIN PANEL)
 // =======================================================================
 
 import express from "express";
@@ -15,8 +15,10 @@ import { fileURLToPath } from "url";
 dotenv.config();
 
 // =======================================================================
-// VALIDAÇÕES
+// CONFIG
 // =======================================================================
+const ADMIN_EMAIL = "moraes_gu@hotmail.com";
+
 if (!process.env.JWT_SECRET) {
   console.error("❌ JWT_SECRET não definido");
   process.exit(1);
@@ -33,16 +35,13 @@ if (!process.env.BASE_URL) {
 }
 
 // =======================================================================
-// MERCADO PAGO V2 CONFIG
+// MERCADO PAGO
 // =======================================================================
 const client = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN
+  accessToken: process.env.MP_ACCESS_TOKEN.trim()
 });
-
 const payment = new Payment(client);
 
-// =======================================================================
-// PATHS
 // =======================================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,9 +50,6 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// =======================================================================
-// MIDDLEWARES
-// =======================================================================
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -64,12 +60,14 @@ app.use(express.urlencoded({ extended: true }));
 const db = new sqlite3.Database(path.join(__dirname, "adminIA.db"));
 
 db.serialize(() => {
+
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT,
       email TEXT UNIQUE,
-      password TEXT
+      password TEXT,
+      role TEXT DEFAULT 'user'
     )
   `);
 
@@ -95,10 +93,16 @@ db.serialize(() => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // Garante que você seja admin sempre
+  db.run(
+    `UPDATE users SET role='admin' WHERE email=?`,
+    [ADMIN_EMAIL]
+  );
 });
 
 // =======================================================================
-// AUTH MIDDLEWARE
+// MIDDLEWARES
 // =======================================================================
 function auth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -118,9 +122,13 @@ function auth(req, res, next) {
   }
 }
 
-// =======================================================================
-// ASSINATURA
-// =======================================================================
+function adminOnly(req, res, next) {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Acesso restrito ao administrador" });
+  }
+  next();
+}
+
 function assinaturaAtiva(req, res, next) {
   db.get(
     `SELECT status FROM subscriptions WHERE user_id=?`,
@@ -138,7 +146,7 @@ function assinaturaAtiva(req, res, next) {
 }
 
 // =======================================================================
-// AUTH ROUTES
+// AUTH
 // =======================================================================
 app.post("/auth/register", (req, res) => {
   const { name = "", email, password } = req.body;
@@ -148,10 +156,11 @@ app.post("/auth/register", (req, res) => {
   }
 
   const hash = bcrypt.hashSync(password, 10);
+  const role = email === ADMIN_EMAIL ? "admin" : "user";
 
   db.run(
-    `INSERT INTO users (name,email,password) VALUES (?,?,?)`,
-    [name, email, hash],
+    `INSERT INTO users (name,email,password,role) VALUES (?,?,?,?)`,
+    [name, email, hash, role],
     function (err) {
       if (err) return res.status(400).json({ error: "Email já existe" });
 
@@ -176,16 +185,70 @@ app.post("/auth/login", (req, res) => {
       return res.status(401).json({ error: "Senha incorreta" });
     }
 
-    const token = jwt.sign({ id: u.id }, process.env.JWT_SECRET, {
-      expiresIn: "7d"
-    });
+    const token = jwt.sign(
+      { id: u.id, role: u.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
-    res.json({ token });
+    res.json({ token, role: u.role });
   });
 });
 
 // =======================================================================
-// GERAR PIX — PLANO FIXO R$70
+// ADMIN ROUTES
+// =======================================================================
+app.get("/admin/stats", auth, adminOnly, (req, res) => {
+
+  db.get(`SELECT COUNT(*) as total FROM users`, [], (_, users) => {
+    db.get(`SELECT COUNT(*) as total FROM subscriptions WHERE status='active'`, [], (_, active) => {
+      db.get(`SELECT COUNT(*) as total FROM subscriptions WHERE status='pending'`, [], (_, pending) => {
+
+        const receita = active.total * 70;
+
+        res.json({
+          users: users.total,
+          active: active.total,
+          pending: pending.total,
+          receita_mensal: receita
+        });
+
+      });
+    });
+  });
+
+});
+
+app.get("/admin/users", auth, adminOnly, (req, res) => {
+  db.all(`
+    SELECT users.id, users.name, users.email, users.role,
+    subscriptions.status
+    FROM users
+    LEFT JOIN subscriptions ON users.id = subscriptions.user_id
+    ORDER BY users.id DESC
+  `, [], (_, rows) => {
+    res.json(rows);
+  });
+});
+
+app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
+  db.run(
+    `UPDATE subscriptions SET status='pending' WHERE user_id=?`,
+    [req.params.id],
+    () => res.json({ success: true })
+  );
+});
+
+app.post("/admin/promote/:id", auth, adminOnly, (req, res) => {
+  db.run(
+    `UPDATE users SET role='admin' WHERE id=?`,
+    [req.params.id],
+    () => res.json({ success: true })
+  );
+});
+
+// =======================================================================
+// PIX
 // =======================================================================
 app.post("/api/create-pix", auth, async (req, res) => {
   try {
@@ -202,10 +265,8 @@ app.post("/api/create-pix", auth, async (req, res) => {
     });
 
     res.json({
-      qr_code:
-        response.point_of_interaction.transaction_data.qr_code,
-      qr_code_base64:
-        response.point_of_interaction.transaction_data.qr_code_base64,
+      qr_code: response.point_of_interaction.transaction_data.qr_code,
+      qr_code_base64: response.point_of_interaction.transaction_data.qr_code_base64,
       payment_id: response.id
     });
 
@@ -235,71 +296,20 @@ app.post("/api/webhook", async (req, res) => {
          WHERE user_id=?`,
         [userId]
       );
-
-      console.log("✅ Assinatura ativada para usuário", userId);
     }
 
     res.sendStatus(200);
-  } catch (err) {
-    console.error("Erro webhook:", err);
+  } catch {
     res.sendStatus(500);
   }
 });
 
 // =======================================================================
-// SUBSCRIPTION STATUS
-// =======================================================================
-app.get("/subscription/status", auth, (req, res) => {
-  db.get(
-    `SELECT status, expires_at FROM subscriptions WHERE user_id=?`,
-    [req.user.id],
-    (_, sub) => {
-      res.json({
-        subscription_status: sub?.status || "pending",
-        subscription_expires_at: sub?.expires_at || null
-      });
-    }
-  );
-});
-
-// =======================================================================
-// CRM
-// =======================================================================
-app.get("/api/crm", auth, assinaturaAtiva, (req, res) => {
-  db.all(
-    `SELECT * FROM crm_clients WHERE user_id=? ORDER BY created_at DESC`,
-    [req.user.id],
-    (_, rows) => res.json(rows)
-  );
-});
-
-app.post("/api/crm", auth, assinaturaAtiva, (req, res) => {
-  const { name, email, phone = "" } = req.body;
-
-  db.run(
-    `INSERT INTO crm_clients (user_id,name,email,phone)
-     VALUES (?,?,?,?)`,
-    [req.user.id, name, email, phone],
-    function () {
-      res.json({ success: true });
-    }
-  );
-});
-
-// =======================================================================
-// FRONTEND
-// =======================================================================
-app.get("/", (_, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
-});
-
 app.use(express.static(PUBLIC_DIR));
-
-app.use((req, res) => {
+app.get("*", (_, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
-// =======================================================================
 app.listen(PORT, () => {
   console.log(`🚀 Aldra ONLINE na porta ${PORT}`);
 });

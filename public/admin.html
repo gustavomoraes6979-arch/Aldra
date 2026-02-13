@@ -1,107 +1,157 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <title>Aldra — Admin</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="UTF-8" />
+<title>Aldra — Painel Administrativo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f4f7fa;
-      padding: 30px;
-    }
+<style>
+:root{
+  --azul:#0A6CBD;
+  --azul-escuro:#053F6B;
+  --verde:#3BB273;
+  --vermelho:#c0392b;
+  --bg:#F4F7FA;
+  --borda:#E3E8EE;
+  --white:#fff;
+  --radius:14px;
+  --shadow:0 12px 30px rgba(0,0,0,.05);
+}
 
-    h1 {
-      margin-bottom: 6px;
-    }
+body{
+  margin:0;
+  background:var(--bg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;
+}
 
-    p {
-      color: #444;
-    }
+/* HEADER */
+header{
+  background:var(--white);
+  padding:18px 32px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-bottom:1px solid var(--borda);
+  box-shadow:var(--shadow);
+}
 
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px;
-      margin: 20px 0;
-    }
+header h1{
+  margin:0;
+  font-size:20px;
+  color:var(--azul-escuro);
+}
 
-    .card {
-      background: #fff;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 5px 20px rgba(0,0,0,.05);
-      text-align: center;
-    }
+.header-actions{
+  display:flex;
+  gap:10px;
+}
 
-    .card h2 {
-      margin: 0;
-      font-size: 28px;
-      color: #0A6CBD;
-    }
+button{
+  border:none;
+  border-radius:10px;
+  padding:8px 14px;
+  font-weight:600;
+  cursor:pointer;
+}
 
-    table {
-      width: 100%;
-      background: #fff;
-      border-collapse: collapse;
-      border-radius: 10px;
-      overflow: hidden;
-      margin-top: 20px;
-    }
+.btn-primary{
+  background:var(--azul);
+  color:white;
+}
 
-    th, td {
-      padding: 14px;
-      border-bottom: 1px solid #eee;
-      font-size: 14px;
-    }
+.btn-danger{
+  background:var(--vermelho);
+  color:white;
+}
 
-    th {
-      background: #0A6CBD;
-      color: #fff;
-    }
+.btn-secondary{
+  background:#111;
+  color:white;
+}
 
-    .status-active { color: green; font-weight: bold; }
-    .status-pending { color: #e69500; font-weight: bold; }
-    .status-blocked { color: red; font-weight: bold; }
+/* CONTAINER */
+.container{
+  padding:35px;
+}
 
-    button {
-      padding: 6px 10px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: bold;
-    }
+/* STATS */
+.stats{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:20px;
+  margin-bottom:30px;
+}
 
-    button.blocked,
-    button:disabled {
-      background: #aaa;
-      cursor: not-allowed;
-    }
+.card{
+  background:var(--white);
+  padding:25px;
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+}
 
-    .btn {
-      background: #0A6CBD;
-      color: #fff;
-    }
+.card p{
+  margin:0;
+  color:#666;
+  font-weight:600;
+}
 
-    .btn-danger {
-      background: #c0392b;
-      color: #fff;
-    }
-  </style>
+.card h2{
+  margin-top:10px;
+  font-size:28px;
+  color:var(--azul);
+}
+
+/* TABLE */
+table{
+  width:100%;
+  background:var(--white);
+  border-collapse:collapse;
+  border-radius:var(--radius);
+  overflow:hidden;
+  box-shadow:var(--shadow);
+}
+
+th,td{
+  padding:14px;
+  text-align:left;
+  font-size:14px;
+  border-bottom:1px solid var(--borda);
+}
+
+th{
+  background:var(--azul);
+  color:white;
+}
+
+.status-active{ color:green;font-weight:bold; }
+.status-pending{ color:#e69500;font-weight:bold; }
+.status-blocked{ color:red;font-weight:bold; }
+
+.actions button{
+  margin-right:6px;
+}
+</style>
 </head>
+
 <body>
 
-  <h1>🛠️ Admin — Aldra</h1>
-  <p>Painel administrativo geral</p>
+<header>
+  <h1>👑 Aldra — Painel Administrativo</h1>
+  <div class="header-actions">
+    <button class="btn-secondary" onclick="voltarDashboard()">Dashboard</button>
+    <button class="btn-danger" onclick="logout()">Sair</button>
+  </div>
+</header>
+
+<div class="container">
 
   <div class="stats">
     <div class="card">
-      <p>Total</p>
+      <p>Total de Usuários</p>
       <h2 id="totalUsers">0</h2>
     </div>
     <div class="card">
-      <p>Ativos</p>
+      <p>Assinaturas Ativas</p>
       <h2 id="activeUsers">0</h2>
     </div>
     <div class="card">
@@ -109,8 +159,8 @@
       <h2 id="pendingUsers">0</h2>
     </div>
     <div class="card">
-      <p>Bloqueados</p>
-      <h2 id="blockedUsers">0</h2>
+      <p>Receita Mensal</p>
+      <h2 id="monthlyRevenue">R$ 0</h2>
     </div>
   </div>
 
@@ -120,14 +170,55 @@
         <th>ID</th>
         <th>Nome</th>
         <th>Email</th>
+        <th>Role</th>
         <th>Status</th>
-        <th>Expira</th>
         <th>Ações</th>
       </tr>
     </thead>
     <tbody id="usersBody"></tbody>
   </table>
 
-  <script src="/admin.js"></script>
+</div>
+
+<script>
+const token = localStorage.getItem("token");
+
+if(!token){
+  window.location.href="/";
+}
+
+// =========================
+// VALIDAR ADMIN
+// =========================
+function parseJwt(t){
+  try{
+    return JSON.parse(atob(t.split('.')[1]));
+  }catch{
+    return null;
+  }
+}
+
+const user = parseJwt(token);
+
+if(!user || user.role !== "admin"){
+  alert("Acesso restrito ao administrador");
+  window.location.href="/dashboard.html";
+}
+
+// =========================
+// LOGOUT
+// =========================
+function logout(){
+  localStorage.removeItem("token");
+  window.location.href="/";
+}
+
+function voltarDashboard(){
+  window.location.href="/dashboard.html";
+}
+</script>
+
+<script src="/admin.js"></script>
+
 </body>
 </html>

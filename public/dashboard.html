@@ -1,221 +1,258 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <title>Aldra — Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="UTF-8" />
+<title>Aldra — Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <style>
-    :root {
-      --azul-escuro: #053F6B;
-      --azul-principal: #0A6CBD;
-      --verde-aldra: #3BB273;
-      --cinza-bg: #F4F7FA;
-      --cinza-borda: #DCE2E8;
-      --white: #ffffff;
-      --radius: 12px;
-      --shadow: 0 6px 16px rgba(5, 25, 45, 0.08);
-    }
+<style>
+:root{
+  --azul-escuro:#053F6B;
+  --azul:#0A6CBD;
+  --verde:#3BB273;
+  --bg:#F4F7FA;
+  --borda:#DCE2E8;
+  --white:#fff;
+  --radius:14px;
+  --shadow:0 10px 25px rgba(0,0,0,.06);
+}
 
-    body {
-      margin: 0;
-      background: var(--cinza-bg);
-      font-family: Arial, sans-serif;
-    }
+body{
+  margin:0;
+  background:var(--bg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
+}
 
-    header {
-      background: var(--white);
-      padding: 14px 28px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--cinza-borda);
-      box-shadow: var(--shadow);
-    }
+/* HEADER */
+header{
+  background:var(--white);
+  padding:18px 32px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-bottom:1px solid var(--borda);
+  box-shadow:var(--shadow);
+}
 
-    header h1 {
-      font-size: 20px;
-      color: var(--azul-escuro);
-      margin: 0;
-    }
+header h1{
+  margin:0;
+  font-size:20px;
+  color:var(--azul-escuro);
+}
 
-    header button {
-      background: #e74c3c;
-      color: white;
-      border: none;
-      padding: 10px 16px;
-      border-radius: var(--radius);
-      cursor: pointer;
-      font-weight: 600;
-    }
+.header-actions{
+  display:flex;
+  gap:10px;
+}
 
-    .alert {
-      background: #fff3cd;
-      color: #856404;
-      border: 1px solid #ffeeba;
-      margin: 20px;
-      padding: 20px;
-      border-radius: var(--radius);
-      font-weight: 600;
-      display: none;
-    }
+button{
+  border:none;
+  border-radius:var(--radius);
+  padding:10px 16px;
+  font-weight:600;
+  cursor:pointer;
+}
 
-    .pix-box {
-      margin-top: 20px;
-      background: white;
-      padding: 20px;
-      border-radius: var(--radius);
-      border: 1px solid var(--cinza-borda);
-      display: none;
-    }
+.btn-admin{
+  background:#111;
+  color:#fff;
+  display:none;
+}
 
-    .pix-box img {
-      width: 220px;
-      margin-top: 10px;
-    }
+.btn-logout{
+  background:#e74c3c;
+  color:white;
+}
 
-    .menu {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      padding: 14px 20px;
-      background: var(--white);
-      border-bottom: 1px solid var(--cinza-borda);
-    }
+/* ALERT ASSINATURA */
+.alert{
+  background:#fff3cd;
+  color:#856404;
+  border:1px solid #ffeeba;
+  margin:25px;
+  padding:24px;
+  border-radius:var(--radius);
+  font-weight:600;
+  display:none;
+}
 
-    .menu button {
-      padding: 10px 18px;
-      background: var(--azul-principal);
-      color: white;
-      border: none;
-      border-radius: var(--radius);
-      font-weight: 600;
-      cursor: pointer;
-    }
+.action{
+  background:var(--verde);
+  color:white;
+  padding:12px 22px;
+  margin-top:15px;
+}
 
-    .section {
-      background: var(--white);
-      margin: 28px;
-      padding: 28px;
-      border-radius: var(--radius);
-      border: 1px solid var(--cinza-borda);
-      box-shadow: var(--shadow);
-      display: none;
-    }
+/* MENU */
+.menu{
+  display:flex;
+  flex-wrap:wrap;
+  gap:14px;
+  padding:18px 28px;
+  background:var(--white);
+  border-bottom:1px solid var(--borda);
+}
 
-    .section.active {
-      display: block;
-    }
+.menu button{
+  background:var(--azul);
+  color:white;
+}
 
-    input, textarea {
-      width: 100%;
-      padding: 12px;
-      margin-top: 10px;
-      border-radius: var(--radius);
-      border: 1px solid var(--cinza-borda);
-    }
+/* SECTION */
+.section{
+  background:var(--white);
+  margin:30px;
+  padding:30px;
+  border-radius:var(--radius);
+  border:1px solid var(--borda);
+  box-shadow:var(--shadow);
+  display:none;
+}
 
-    .action {
-      background: var(--verde-aldra);
-      color: white;
-      padding: 12px 22px;
-      border-radius: var(--radius);
-      border: none;
-      cursor: pointer;
-      margin-top: 14px;
-      font-weight: 700;
-    }
+.section.active{
+  display:block;
+}
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
+input, textarea{
+  width:100%;
+  padding:12px;
+  margin-top:10px;
+  border-radius:var(--radius);
+  border:1px solid var(--borda);
+}
 
-    th, td {
-      padding: 12px;
-      border-bottom: 1px solid var(--cinza-borda);
-      text-align: left;
-    }
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:20px;
+}
 
-    th {
-      background: #f1f4f8;
-    }
-  </style>
+th,td{
+  padding:12px;
+  border-bottom:1px solid var(--borda);
+}
+
+th{
+  background:#f1f4f8;
+}
+
+/* PIX */
+.pix-box{
+  margin-top:20px;
+  background:white;
+  padding:20px;
+  border-radius:var(--radius);
+  border:1px solid var(--borda);
+  display:none;
+}
+
+.pix-box img{
+  width:220px;
+  margin-top:10px;
+}
+</style>
 </head>
 
 <body>
 
 <header>
-  <h1>Aldra — Plataforma Administrativa</h1>
-  <button onclick="logout()">Sair</button>
+  <h1>🚀 Aldra — Plataforma Administrativa</h1>
+  <div class="header-actions">
+    <button class="btn-admin" id="adminBtn" onclick="irAdmin()">Admin</button>
+    <button class="btn-logout" onclick="logout()">Sair</button>
+  </div>
 </header>
 
 <div id="alert" class="alert">
-  ⚠️ Sua assinatura não está ativa.<br><br>
-  <button class="action" onclick="gerarPix()">Assinar Plano Mensal — R$ 70,00</button>
+⚠️ Sua assinatura não está ativa.<br><br>
+<button class="action" onclick="gerarPix()">Assinar Plano Mensal — R$ 70,00</button>
 
-  <div class="pix-box" id="pixBox">
-    <h3>📲 Escaneie o QR Code</h3>
-    <img id="qrImage" />
-    <p><strong>Copia e Cola:</strong></p>
-    <textarea id="pixCode" readonly></textarea>
-  </div>
+<div class="pix-box" id="pixBox">
+<h3>📲 Escaneie o QR Code</h3>
+<img id="qrImage" />
+<p><strong>Copia e Cola:</strong></p>
+<textarea id="pixCode" readonly></textarea>
+</div>
 </div>
 
 <div class="menu" id="menu">
-  <button onclick="showSection('PDF')">📄 Análise de PDF</button>
-  <button onclick="showSection('Contrato')">📝 Gerar Contrato</button>
-  <button onclick="showSection('Cobranca')">💳 Cobrança</button>
-  <button onclick="showSection('Relatorios')">📊 Relatórios</button>
-  <button onclick="showSection('Chat')">💬 Chat IA</button>
-  <button onclick="showSection('CRM')">👥 CRM</button>
+<button onclick="showSection('PDF')">📄 PDF</button>
+<button onclick="showSection('Contrato')">📝 Contrato</button>
+<button onclick="showSection('Cobranca')">💳 Cobrança</button>
+<button onclick="showSection('Relatorios')">📊 Relatórios</button>
+<button onclick="showSection('Chat')">💬 Chat IA</button>
+<button onclick="showSection('CRM')">👥 CRM</button>
 </div>
 
 <div id="sectionPDF" class="section"><h2>📄 Análise de PDF</h2></div>
 <div id="sectionContrato" class="section"><h2>📝 Gerador de Contratos</h2></div>
 <div id="sectionCobranca" class="section"><h2>💳 Cobrança</h2></div>
 <div id="sectionRelatorios" class="section"><h2>📊 Relatórios</h2></div>
-<div id="sectionChat" class="section"><h2>💬 Chat Inteligente</h2></div>
+<div id="sectionChat" class="section"><h2>💬 Chat IA</h2></div>
 
 <div id="sectionCRM" class="section">
-  <h2>👥 CRM</h2>
-  <input id="crmNome" placeholder="Nome do cliente">
-  <input id="crmEmail" placeholder="E-mail">
-  <input id="crmTelefone" placeholder="Telefone">
-  <button class="action" onclick="salvarCliente()">Salvar Cliente</button>
-  <table>
-    <thead>
-      <tr>
-        <th>Nome</th>
-        <th>Email</th>
-        <th>Telefone</th>
-      </tr>
-    </thead>
-    <tbody id="crmLista"></tbody>
-  </table>
+<h2>👥 CRM</h2>
+
+<input id="crmNome" placeholder="Nome do cliente">
+<input id="crmEmail" placeholder="E-mail">
+<input id="crmTelefone" placeholder="Telefone">
+<button class="action" onclick="salvarCliente()">Salvar Cliente</button>
+
+<table>
+<thead>
+<tr>
+<th>Nome</th>
+<th>Email</th>
+<th>Telefone</th>
+</tr>
+</thead>
+<tbody id="crmLista"></tbody>
+</table>
 </div>
 
 <script>
 const token = localStorage.getItem("token");
 
-if (!token) {
-  window.location.href = "/";
+if(!token){
+  window.location.href="/";
+}
+
+// =========================
+// DECODIFICAR TOKEN
+// =========================
+function parseJwt (t){
+  try{
+    return JSON.parse(atob(t.split('.')[1]));
+  }catch{
+    return null;
+  }
+}
+
+const user = parseJwt(token);
+
+// Mostrar botão admin se for admin
+if(user?.role === "admin"){
+  document.getElementById("adminBtn").style.display="inline-block";
 }
 
 // =========================
 // VERIFICAR ASSINATURA
 // =========================
-async function verificarAssinatura() {
-  const res = await fetch("/subscription/status", {
-    headers: { Authorization: "Bearer " + token }
+async function verificarAssinatura(){
+  const res = await fetch("/subscription/status",{
+    headers:{ Authorization:"Bearer "+token }
   });
+
+  if(res.status===401){
+    logout();
+    return;
+  }
 
   const data = await res.json();
 
-  if (data.subscription_status !== "active") {
-    document.getElementById("alert").style.display = "block";
-    document.getElementById("menu").style.display = "none";
+  if(data.subscription_status !== "active"){
+    document.getElementById("alert").style.display="block";
+    document.getElementById("menu").style.display="none";
   }
 }
 
@@ -224,42 +261,99 @@ verificarAssinatura();
 // =========================
 // GERAR PIX
 // =========================
-async function gerarPix() {
-  const res = await fetch("/api/create-pix", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + token
+async function gerarPix(){
+  const res = await fetch("/api/create-pix",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      Authorization:"Bearer "+token
     }
   });
 
   const data = await res.json();
 
-  document.getElementById("pixBox").style.display = "block";
+  document.getElementById("pixBox").style.display="block";
   document.getElementById("qrImage").src =
-    "data:image/png;base64," + data.qr_code_base64;
-  document.getElementById("pixCode").value = data.qr_code;
+    "data:image/png;base64,"+data.qr_code_base64;
+  document.getElementById("pixCode").value=data.qr_code;
 }
 
 // =========================
-// LOGOUT
+// CRM
 // =========================
-function logout() {
-  localStorage.removeItem("token");
-  window.location.href = "/";
+async function carregarCRM(){
+  const res = await fetch("/api/crm",{
+    headers:{ Authorization:"Bearer "+token }
+  });
+
+  if(res.status!==200) return;
+
+  const data = await res.json();
+  const tbody = document.getElementById("crmLista");
+  tbody.innerHTML="";
+
+  data.forEach(c=>{
+    tbody.innerHTML+=`
+      <tr>
+        <td>${c.name}</td>
+        <td>${c.email}</td>
+        <td>${c.phone||""}</td>
+      </tr>
+    `;
+  });
+}
+
+async function salvarCliente(){
+  const nome=document.getElementById("crmNome").value;
+  const email=document.getElementById("crmEmail").value;
+  const telefone=document.getElementById("crmTelefone").value;
+
+  await fetch("/api/crm",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      Authorization:"Bearer "+token
+    },
+    body:JSON.stringify({ name:nome,email,phone:telefone })
+  });
+
+  document.getElementById("crmNome").value="";
+  document.getElementById("crmEmail").value="";
+  document.getElementById("crmTelefone").value="";
+
+  carregarCRM();
 }
 
 // =========================
 // MENU
 // =========================
-function showSection(name) {
-  document.querySelectorAll(".section").forEach(sec =>
+function showSection(name){
+  document.querySelectorAll(".section").forEach(sec=>
     sec.classList.remove("active")
   );
-  document.getElementById("section" + name).classList.add("active");
+  document.getElementById("section"+name).classList.add("active");
+
+  if(name==="CRM"){
+    carregarCRM();
+  }
 }
 
 showSection("PDF");
+
+// =========================
+// ADMIN
+// =========================
+function irAdmin(){
+  window.location.href="/admin.html";
+}
+
+// =========================
+// LOGOUT
+// =========================
+function logout(){
+  localStorage.removeItem("token");
+  window.location.href="/";
+}
 </script>
 
 </body>
