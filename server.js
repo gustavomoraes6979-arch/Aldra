@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (PRODUCTION STABLE)
+// Aldra — server.js (ADMIN 100% BLINDADO)
 // =======================================================================
 
 import express from "express";
@@ -66,8 +66,7 @@ db.serialize(() => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT,
       email TEXT UNIQUE,
-      password TEXT,
-      role TEXT DEFAULT 'user'
+      password TEXT
     )
   `);
 
@@ -81,29 +80,10 @@ db.serialize(() => {
     )
   `);
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS crm_clients (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      name TEXT,
-      email TEXT,
-      phone TEXT,
-      status TEXT DEFAULT 'lead',
-      notes TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // Garante admin sempre
-  db.get(`SELECT * FROM users WHERE email=?`, [ADMIN_EMAIL], (err, user) => {
-    if (!user) return;
-
-    db.run(`UPDATE users SET role='admin' WHERE email=?`, [ADMIN_EMAIL]);
-  });
 });
 
 // =======================================================================
-// MIDDLEWARES
+// MIDDLEWARE AUTH
 // =======================================================================
 function auth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -113,20 +93,36 @@ function auth(req, res, next) {
   }
 
   try {
-    req.user = jwt.verify(
+    const decoded = jwt.verify(
       authHeader.replace("Bearer ", ""),
       process.env.JWT_SECRET
     );
-    next();
+
+    // Buscar usuário real no banco
+    db.get(`SELECT * FROM users WHERE id=?`, [decoded.id], (err, user) => {
+      if (!user) {
+        return res.status(401).json({ error: "Usuário inválido" });
+      }
+
+      req.user = user;
+      next();
+    });
+
   } catch {
     return res.status(401).json({ error: "Token inválido" });
   }
 }
 
+// =======================================================================
+// ADMIN BLINDADO
+// =======================================================================
 function adminOnly(req, res, next) {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Acesso restrito" });
+
+  // ADMIN SOMENTE PELO EMAIL FIXO
+  if (req.user.email !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Acesso restrito ao proprietário" });
   }
+
   next();
 }
 
@@ -141,11 +137,10 @@ app.post("/auth/register", (req, res) => {
   }
 
   const hash = bcrypt.hashSync(password, 10);
-  const role = email === ADMIN_EMAIL ? "admin" : "user";
 
   db.run(
-    `INSERT INTO users (name,email,password,role) VALUES (?,?,?,?)`,
-    [name, email, hash, role],
+    `INSERT INTO users (name,email,password) VALUES (?,?,?)`,
+    [name, email, hash],
     function (err) {
       if (err) return res.status(400).json({ error: "Email já existe" });
 
@@ -163,27 +158,32 @@ app.post("/auth/register", (req, res) => {
 app.post("/auth/login", (req, res) => {
   const { email, password } = req.body;
 
-  db.get(`SELECT * FROM users WHERE email=?`, [email], (_, u) => {
-    if (!u) return res.status(404).json({ error: "Usuário não encontrado" });
+  db.get(`SELECT * FROM users WHERE email=?`, [email], (_, user) => {
 
-    if (!bcrypt.compareSync(password, u.password)) {
+    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
+
+    if (!bcrypt.compareSync(password, user.password)) {
       return res.status(401).json({ error: "Senha incorreta" });
     }
 
     const token = jwt.sign(
-      { id: u.id, role: u.role },
+      { id: user.id },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    res.json({ token, role: u.role });
+    // Role agora é calculado dinamicamente
+    const role = user.email === ADMIN_EMAIL ? "admin" : "user";
+
+    res.json({ token, role });
   });
 });
 
 // =======================================================================
-// ADMIN
+// ADMIN ROUTES
 // =======================================================================
 app.get("/admin/stats", auth, adminOnly, (req, res) => {
+
   db.get(`SELECT COUNT(*) as total FROM users`, [], (_, users) => {
     db.get(`SELECT COUNT(*) as total FROM subscriptions WHERE status='active'`, [], (_, active) => {
       db.get(`SELECT COUNT(*) as total FROM subscriptions WHERE status='pending'`, [], (_, pending) => {
@@ -200,11 +200,12 @@ app.get("/admin/stats", auth, adminOnly, (req, res) => {
       });
     });
   });
+
 });
 
 app.get("/admin/users", auth, adminOnly, (req, res) => {
   db.all(`
-    SELECT users.id, users.name, users.email, users.role,
+    SELECT users.id, users.name, users.email,
     subscriptions.status
     FROM users
     LEFT JOIN subscriptions ON users.id = subscriptions.user_id
@@ -214,79 +215,8 @@ app.get("/admin/users", auth, adminOnly, (req, res) => {
   });
 });
 
-app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
-  db.run(
-    `UPDATE subscriptions SET status='pending' WHERE user_id=?`,
-    [req.params.id],
-    () => res.json({ success: true })
-  );
-});
-
-app.post("/admin/promote/:id", auth, adminOnly, (req, res) => {
-  db.run(
-    `UPDATE users SET role='admin' WHERE id=?`,
-    [req.params.id],
-    () => res.json({ success: true })
-  );
-});
-
 // =======================================================================
-// PIX
-// =======================================================================
-app.post("/api/create-pix", auth, async (req, res) => {
-  try {
-    const response = await payment.create({
-      body: {
-        transaction_amount: 70,
-        description: "Plano Mensal Aldra",
-        payment_method_id: "pix",
-        payer: {
-          email: req.user.id + "@aldra.com"
-        },
-        notification_url: `${process.env.BASE_URL}/api/webhook`
-      }
-    });
-
-    res.json({
-      qr_code: response.point_of_interaction.transaction_data.qr_code,
-      qr_code_base64: response.point_of_interaction.transaction_data.qr_code_base64
-    });
-
-  } catch (error) {
-    console.error("Erro PIX:", error);
-    res.status(500).json({ error: "Erro ao gerar PIX" });
-  }
-});
-
-// =======================================================================
-// WEBHOOK
-// =======================================================================
-app.post("/api/webhook", async (req, res) => {
-  try {
-    const paymentId = req.body?.data?.id;
-    if (!paymentId) return res.sendStatus(200);
-
-    const result = await payment.get({ id: paymentId });
-
-    if (result.status === "approved") {
-      const userId = parseInt(result.payer.email.split("@")[0]);
-
-      db.run(`
-        UPDATE subscriptions
-        SET status='active',
-        expires_at=datetime('now','+30 days')
-        WHERE user_id=?
-      `, [userId]);
-    }
-
-    res.sendStatus(200);
-  } catch {
-    res.sendStatus(500);
-  }
-});
-
-// =======================================================================
-// STATIC + FALLBACK (EXPRESS 4 SAFE)
+// STATIC
 // =======================================================================
 app.use(express.static(PUBLIC_DIR));
 
