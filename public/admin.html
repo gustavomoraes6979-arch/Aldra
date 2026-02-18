@@ -178,9 +178,12 @@ th{
 
 <script>
 const token = localStorage.getItem("token");
+const isAdmin = localStorage.getItem("isAdmin");
 
-if(!token){
-  window.location.href="/";
+// 🔒 BLOQUEIO INICIAL
+if(!token || !isAdmin){
+  alert("Acesso não autorizado.");
+  window.location.href="/dashboard.html";
 }
 
 // ===============================
@@ -202,7 +205,8 @@ async function validarAdmin(){
     const data = await res.json();
 
     if(!data.isAdmin){
-      alert("Acesso restrito ao administrador");
+      alert("Acesso restrito ao administrador.");
+      localStorage.removeItem("isAdmin");
       window.location.href="/dashboard.html";
       return;
     }
@@ -215,14 +219,16 @@ async function validarAdmin(){
 validarAdmin();
 
 // ===============================
-// LOGOUT
+// LOGOUT TOTAL
 // ===============================
 function logout(){
   localStorage.removeItem("token");
+  localStorage.removeItem("isAdmin");
   window.location.href="/";
 }
 
 function voltarDashboard(){
+  localStorage.removeItem("isAdmin");
   window.location.href="/dashboard.html";
 }
 </script>

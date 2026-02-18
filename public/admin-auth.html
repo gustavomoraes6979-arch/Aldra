@@ -1,39 +1,126 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Verificação Administrador</title>
-  <link rel="stylesheet" href="/css/style.css">
+<meta charset="UTF-8">
+<title>🔐 Verificação Administrador — Aldra</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body{
+  margin:0;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+  background:#f4f6f9;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
+}
+
+.card{
+  background:white;
+  padding:35px;
+  border-radius:14px;
+  box-shadow:0 10px 25px rgba(0,0,0,0.08);
+  width:360px;
+  text-align:center;
+}
+
+h2{
+  margin-top:0;
+}
+
+input{
+  width:100%;
+  padding:12px;
+  margin-top:15px;
+  border-radius:8px;
+  border:1px solid #dce2e8;
+  font-size:14px;
+}
+
+button{
+  margin-top:18px;
+  width:100%;
+  padding:12px;
+  background:#111;
+  color:white;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  font-weight:600;
+}
+
+button:hover{
+  opacity:0.9;
+}
+
+.erro{
+  color:#e74c3c;
+  margin-top:12px;
+  font-size:14px;
+}
+
+.sucesso{
+  color:#2ecc71;
+  margin-top:12px;
+  font-size:14px;
+}
+</style>
 </head>
-<body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#f4f6f9;">
 
-  <div style="background:white;padding:30px;border-radius:10px;box-shadow:0 5px 20px rgba(0,0,0,0.1);width:350px;text-align:center;">
-    <h2>🔐 Área Administrativa</h2>
-    <p>Digite seu email para confirmar acesso</p>
+<body>
 
-    <input type="email" id="adminEmail" placeholder="Seu email"
-      style="width:100%;padding:10px;margin-top:15px;border-radius:6px;border:1px solid #ccc;">
+<div class="card">
+  <h2>🔐 Área Administrativa</h2>
+  <p>Confirme seu email para acessar o painel</p>
 
-    <button onclick="verificarAdmin()"
-      style="margin-top:15px;width:100%;padding:10px;background:#1a73e8;color:white;border:none;border-radius:6px;cursor:pointer;">
-      Confirmar
-    </button>
+  <input type="email" id="adminEmail" placeholder="Seu email" />
 
-    <p id="erro" style="color:red;margin-top:10px;"></p>
-  </div>
+  <button onclick="verificarAdmin()">Confirmar Acesso</button>
+
+  <p id="mensagem"></p>
+</div>
 
 <script>
+
+// 🔒 Impede acesso se não estiver logado
+const token = localStorage.getItem("token");
+
+if (!token) {
+  alert("Você precisa estar logado.");
+  window.location.href = "/";
+}
+
 function verificarAdmin() {
 
   const emailDigitado = document.getElementById("adminEmail").value.trim().toLowerCase();
   const emailAdmin = "moraes_gu@hotmail.com";
+  const mensagem = document.getElementById("mensagem");
+
+  if (!emailDigitado) {
+    mensagem.className = "erro";
+    mensagem.innerText = "Digite seu email.";
+    return;
+  }
 
   if (emailDigitado === emailAdmin) {
-    window.location.href = "/admin.html";
+
+    // 🔥 salva permissão temporária
+    localStorage.setItem("isAdmin", "true");
+
+    mensagem.className = "sucesso";
+    mensagem.innerText = "Acesso autorizado...";
+
+    setTimeout(() => {
+      window.location.href = "/admin.html";
+    }, 800);
+
   } else {
-    document.getElementById("erro").innerText = "Email não autorizado.";
+    mensagem.className = "erro";
+    mensagem.innerText = "Email não autorizado.";
   }
 }
+
 </script>
 
 </body>

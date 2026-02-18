@@ -52,10 +52,10 @@ button{
   cursor:pointer;
 }
 
+/* 🔥 ADMIN SEMPRE VISÍVEL */
 .btn-admin{
   background:#111;
   color:#fff;
-  display:none;
 }
 
 .btn-logout{
@@ -153,7 +153,11 @@ th{
 <header>
   <h1>🚀 Aldra — Plataforma Administrativa</h1>
   <div class="header-actions">
-    <button class="btn-admin" id="adminBtn" onclick="window.location.href='/admin-auth.html'">Admin</button>
+    <!-- 🔥 BOTÃO ADMIN SEMPRE VISÍVEL -->
+    <button class="btn-admin" onclick="window.location.href='/admin-auth.html'">
+      🔐 Admin
+    </button>
+
     <button class="btn-logout" onclick="logout()">Sair</button>
   </div>
 </header>
@@ -209,7 +213,6 @@ th{
 
 </div>
 
-<!-- SCRIPT PRINCIPAL -->
 <script src="/dashboard.js"></script>
 
 </body>
