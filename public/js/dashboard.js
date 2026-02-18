@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — Aldra Dashboard (PROTEÇÃO REAL)
+// dashboard.js — Aldra Dashboard (Compatível Server Blindado)
 // ==========================================
 
 (function () {
@@ -16,44 +16,36 @@
     return;
   }
 
-  // ==========================================
-  // ELEMENTOS
-  // ==========================================
   const alertBox = document.getElementById("alert");
   const crmLista = document.getElementById("crmLista");
 
   let subscriptionActive = false;
 
   // ==========================================
-  // VALIDAR SESSÃO
+  // VALIDA TOKEN TESTANDO CRM
   // ==========================================
   async function validateSession() {
     try {
-      const res = await fetch("/subscription/status", {
+      const res = await fetch("/api/crm", {
         headers: {
           Authorization: "Bearer " + token
         }
       });
 
-      // Token inválido ou expirado
       if (res.status === 401) {
         forceLogout();
         return;
       }
 
-      if (!res.ok) {
-        console.warn("Erro ao validar assinatura");
+      if (res.status === 403) {
+        subscriptionActive = false;
+        if (alertBox) alertBox.style.display = "block";
         return;
       }
 
-      const data = await res.json();
-
-      if (data.subscription_status === "active") {
+      if (res.ok) {
         subscriptionActive = true;
         if (alertBox) alertBox.style.display = "none";
-      } else {
-        subscriptionActive = false;
-        if (alertBox) alertBox.style.display = "block";
       }
 
     } catch (err) {
@@ -97,7 +89,6 @@
 
     if (!el) return;
 
-    // Bloqueia CRM se assinatura não ativa
     if (name === "CRM" && !subscriptionActive) {
       alert("Sua assinatura precisa estar ativa para usar o CRM.");
       return;
@@ -127,6 +118,11 @@
 
       if (res.status === 401) {
         forceLogout();
+        return;
+      }
+
+      if (!res.ok) {
+        alert("Erro ao carregar CRM.");
         return;
       }
 

@@ -1,5 +1,5 @@
 // =====================================================
-// Admin.js — Aldra (Painel Profissional)
+// Admin.js — Aldra (Compatível com Server Blindado)
 // =====================================================
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -20,6 +20,7 @@ async function carregarPainel() {
   } catch (err) {
     console.error(err);
     alert("Erro ao carregar painel administrativo");
+    logoutForcado();
   }
 }
 
@@ -32,7 +33,7 @@ async function carregarStats(token) {
   });
 
   if (res.status === 401 || res.status === 403) {
-    window.location.href = "/dashboard.html";
+    logoutForcado();
     return;
   }
 
@@ -53,6 +54,11 @@ async function carregarUsuarios(token) {
     headers: { Authorization: `Bearer ${token}` }
   });
 
+  if (res.status === 401 || res.status === 403) {
+    logoutForcado();
+    return;
+  }
+
   if (!res.ok) {
     alert("Erro ao carregar usuários");
     return;
@@ -71,25 +77,17 @@ function renderUsuarios(users) {
 
     let statusClass = "status-pending";
     if (user.status === "active") statusClass = "status-active";
-    if (user.status === "blocked") statusClass = "status-blocked";
 
     tr.innerHTML = `
       <td>${user.id}</td>
       <td>${user.name || "-"}</td>
       <td>${user.email}</td>
-      <td>${user.role}</td>
       <td class="${statusClass}">${user.status || "pending"}</td>
       <td class="actions">
         <button class="btn-primary"
           onclick="cancelar(${user.id})"
           ${user.status !== "active" ? "disabled" : ""}>
           Cancelar
-        </button>
-
-        <button class="btn-secondary"
-          onclick="promover(${user.id})"
-          ${user.role === "admin" ? "disabled" : ""}>
-          Tornar Admin
         </button>
       </td>
     `;
@@ -106,11 +104,6 @@ async function cancelar(id) {
   await adminAction(`/admin/cancel/${id}`);
 }
 
-async function promover(id) {
-  if (!confirm("Tornar este usuário administrador?")) return;
-  await adminAction(`/admin/promote/${id}`);
-}
-
 async function adminAction(url) {
   const token = localStorage.getItem("token");
 
@@ -121,10 +114,24 @@ async function adminAction(url) {
     }
   });
 
+  if (res.status === 401 || res.status === 403) {
+    logoutForcado();
+    return;
+  }
+
   if (!res.ok) {
     alert("Erro na operação");
     return;
   }
 
   carregarPainel();
+}
+
+// =====================================================
+// LOGOUT FORÇADO (SEGURANÇA)
+// =====================================================
+function logoutForcado() {
+  localStorage.removeItem("token");
+  alert("Acesso restrito ao administrador.");
+  window.location.href = "/dashboard.html";
 }
