@@ -1,17 +1,13 @@
 // ==========================================
-// dashboard.js — Aldra Dashboard (Compatível Server Blindado)
+// dashboard.js — Aldra SaaS Profissional
 // ==========================================
 
 (function () {
-  console.log("🚀 Dashboard inicializando...");
+  console.log("🚀 Dashboard SaaS iniciando...");
 
   const token = localStorage.getItem("token");
 
-  // ==========================================
-  // BLOQUEIO TOTAL SEM TOKEN
-  // ==========================================
   if (!token) {
-    console.warn("🔒 Token ausente. Redirecionando...");
     window.location.href = "/";
     return;
   }
@@ -20,39 +16,7 @@
   const crmLista = document.getElementById("crmLista");
 
   let subscriptionActive = false;
-
-  // ==========================================
-  // VALIDA TOKEN TESTANDO CRM
-  // ==========================================
-  async function validateSession() {
-    try {
-      const res = await fetch("/api/crm", {
-        headers: {
-          Authorization: "Bearer " + token
-        }
-      });
-
-      if (res.status === 401) {
-        forceLogout();
-        return;
-      }
-
-      if (res.status === 403) {
-        subscriptionActive = false;
-        if (alertBox) alertBox.style.display = "block";
-        return;
-      }
-
-      if (res.ok) {
-        subscriptionActive = true;
-        if (alertBox) alertBox.style.display = "none";
-      }
-
-    } catch (err) {
-      console.error("Erro crítico:", err);
-      forceLogout();
-    }
-  }
+  let isAdmin = false;
 
   // ==========================================
   // LOGOUT FORÇADO
@@ -61,6 +25,98 @@
     localStorage.removeItem("token");
     window.location.href = "/";
   }
+
+  // ==========================================
+  // VERIFICA USUÁRIO
+  // ==========================================
+  async function loadUser() {
+    try {
+      const res = await fetch("/api/me", {
+        headers: { Authorization: "Bearer " + token }
+      });
+
+      if (!res.ok) {
+        forceLogout();
+        return;
+      }
+
+      const data = await res.json();
+      isAdmin = data.isAdmin;
+
+    } catch (err) {
+      console.error(err);
+      forceLogout();
+    }
+  }
+
+  // ==========================================
+  // VERIFICA ASSINATURA
+  // ==========================================
+  async function checkSubscription() {
+
+    if (isAdmin) {
+      subscriptionActive = true;
+      if (alertBox) alertBox.style.display = "none";
+      return;
+    }
+
+    try {
+      const res = await fetch("/subscription/status", {
+        headers: { Authorization: "Bearer " + token }
+      });
+
+      if (res.status === 401) {
+        forceLogout();
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data.status === "active") {
+        subscriptionActive = true;
+        if (alertBox) alertBox.style.display = "none";
+      } else {
+        subscriptionActive = false;
+        if (alertBox) alertBox.style.display = "block";
+      }
+
+    } catch (err) {
+      console.error(err);
+      forceLogout();
+    }
+  }
+
+  // ==========================================
+  // PAGAMENTO
+  // ==========================================
+  window.ativarPlano = async function () {
+
+    try {
+      const res = await fetch("/create-payment", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + token
+        }
+      });
+
+      if (!res.ok) {
+        alert("Erro ao gerar pagamento.");
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data.point_of_interaction?.transaction_data?.qr_code_base64) {
+        alert("Pagamento PIX gerado. Verifique o QR Code retornado pela API.");
+      } else {
+        alert("Pagamento criado com sucesso.");
+      }
+
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao iniciar pagamento.");
+    }
+  };
 
   // ==========================================
   // SEÇÕES
@@ -82,23 +138,18 @@
   }
 
   function showSection(name) {
-    hideAllSections();
 
-    const sectionId = "section" + name;
-    const el = document.getElementById(sectionId);
-
-    if (!el) return;
-
-    if (name === "CRM" && !subscriptionActive) {
-      alert("Sua assinatura precisa estar ativa para usar o CRM.");
+    if (!subscriptionActive && !isAdmin) {
+      alert("Sua assinatura está inativa.");
       return;
     }
 
-    el.classList.add("active");
+    hideAllSections();
 
-    if (name === "CRM") {
-      loadClients();
-    }
+    const el = document.getElementById("section" + name);
+    if (el) el.classList.add("active");
+
+    if (name === "CRM") loadClients();
   }
 
   window.showSection = showSection;
@@ -107,13 +158,10 @@
   // CRM
   // ==========================================
   async function loadClients() {
-    if (!subscriptionActive) return;
 
     try {
       const res = await fetch("/api/crm", {
-        headers: {
-          Authorization: "Bearer " + token
-        }
+        headers: { Authorization: "Bearer " + token }
       });
 
       if (res.status === 401) {
@@ -141,12 +189,13 @@
       });
 
     } catch (err) {
-      console.error("Erro ao carregar CRM:", err);
+      console.error(err);
     }
   }
 
   window.salvarCliente = async function () {
-    if (!subscriptionActive) {
+
+    if (!subscriptionActive && !isAdmin) {
       alert("Assinatura necessária.");
       return;
     }
@@ -191,7 +240,7 @@
       loadClients();
 
     } catch (err) {
-      console.error("Erro ao salvar cliente:", err);
+      console.error(err);
     }
   };
 
@@ -205,8 +254,12 @@
   // ==========================================
   // INICIALIZAÇÃO
   // ==========================================
-  validateSession().then(() => {
+  async function init() {
+    await loadUser();
+    await checkSubscription();
     showSection("PDF");
-  });
+  }
+
+  init();
 
 })();

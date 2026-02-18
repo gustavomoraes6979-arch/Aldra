@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (ADMIN 100% BLINDADO + API ME)
+// Aldra — server.js (SaaS PROFISSIONAL + ASSINATURA REAL)
 // =======================================================================
 
 import express from "express";
@@ -17,32 +17,26 @@ dotenv.config();
 // =======================================================================
 // CONFIG
 // =======================================================================
+
 const ADMIN_EMAIL = "moraes_gu@hotmail.com".toLowerCase();
+const PLAN_PRICE = 70;
 
-if (!process.env.JWT_SECRET) {
-  console.error("❌ JWT_SECRET não definido");
-  process.exit(1);
-}
-
-if (!process.env.MP_ACCESS_TOKEN) {
-  console.error("❌ MP_ACCESS_TOKEN não definido");
-  process.exit(1);
-}
-
-if (!process.env.BASE_URL) {
-  console.error("❌ BASE_URL não definido");
-  process.exit(1);
-}
+if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
+if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
+if (!process.env.BASE_URL) throw new Error("BASE_URL não definido");
 
 // =======================================================================
 // MERCADO PAGO
 // =======================================================================
+
 const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN.trim()
 });
+
 const payment = new Payment(client);
 
 // =======================================================================
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -57,6 +51,7 @@ app.use(express.urlencoded({ extended: true }));
 // =======================================================================
 // DATABASE
 // =======================================================================
+
 const db = new sqlite3.Database(path.join(__dirname, "adminIA.db"));
 
 db.serialize(() => {
@@ -83,8 +78,9 @@ db.serialize(() => {
 });
 
 // =======================================================================
-// MIDDLEWARE AUTH
+// AUTH
 // =======================================================================
+
 function auth(req, res, next) {
 
   const authHeader = req.headers.authorization;
@@ -101,14 +97,8 @@ function auth(req, res, next) {
 
     db.get(`SELECT * FROM users WHERE id=?`, [decoded.id], (err, user) => {
 
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: "Erro interno" });
-      }
-
-      if (!user) {
-        return res.status(401).json({ error: "Usuário inválido" });
-      }
+      if (err) return res.status(500).json({ error: "Erro interno" });
+      if (!user) return res.status(401).json({ error: "Usuário inválido" });
 
       req.user = user;
       next();
@@ -119,28 +109,25 @@ function auth(req, res, next) {
   }
 }
 
-// =======================================================================
-// ADMIN BLINDADO
-// =======================================================================
 function adminOnly(req, res, next) {
 
   if (!req.user || req.user.email.toLowerCase() !== ADMIN_EMAIL) {
-    return res.status(403).json({ error: "Acesso restrito ao proprietário" });
+    return res.status(403).json({ error: "Acesso restrito" });
   }
 
   next();
 }
 
 // =======================================================================
-// AUTH
+// REGISTER
 // =======================================================================
+
 app.post("/auth/register", (req, res) => {
 
   let { name = "", email, password } = req.body;
 
-  if (!email || !password) {
+  if (!email || !password)
     return res.status(400).json({ error: "Dados inválidos" });
-  }
 
   email = email.toLowerCase().trim();
 
@@ -151,9 +138,8 @@ app.post("/auth/register", (req, res) => {
     [name, email, hash],
     function (err) {
 
-      if (err) {
+      if (err)
         return res.status(400).json({ error: "Email já existe" });
-      }
 
       db.run(
         `INSERT INTO subscriptions (user_id,status)
@@ -166,29 +152,26 @@ app.post("/auth/register", (req, res) => {
   );
 });
 
+// =======================================================================
+// LOGIN
+// =======================================================================
+
 app.post("/auth/login", (req, res) => {
 
   let { email, password } = req.body;
 
-  if (!email || !password) {
+  if (!email || !password)
     return res.status(400).json({ error: "Dados inválidos" });
-  }
 
   email = email.toLowerCase().trim();
 
   db.get(`SELECT * FROM users WHERE email=?`, [email], (err, user) => {
 
-    if (err) {
-      return res.status(500).json({ error: "Erro interno" });
-    }
+    if (err) return res.status(500).json({ error: "Erro interno" });
+    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
 
-    if (!user) {
-      return res.status(404).json({ error: "Usuário não encontrado" });
-    }
-
-    if (!bcrypt.compareSync(password, user.password)) {
+    if (!bcrypt.compareSync(password, user.password))
       return res.status(401).json({ error: "Senha incorreta" });
-    }
 
     const token = jwt.sign(
       { id: user.id },
@@ -203,34 +186,139 @@ app.post("/auth/login", (req, res) => {
 });
 
 // =======================================================================
-// API ME
+// CRIAR PAGAMENTO
 // =======================================================================
-app.get("/api/me", auth, (req, res) => {
 
-  const isAdmin = req.user.email.toLowerCase() === ADMIN_EMAIL;
+app.post("/create-payment", auth, async (req, res) => {
 
-  res.json({
-    email: req.user.email,
-    isAdmin
-  });
+  try {
+
+    const body = {
+      transaction_amount: PLAN_PRICE,
+      description: "Assinatura Aldra - 30 dias",
+      payment_method_id: "pix",
+      payer: {
+        email: req.user.email
+      }
+    };
+
+    const result = await payment.create({ body });
+
+    res.json(result);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Erro ao criar pagamento" });
+  }
+
 });
 
 // =======================================================================
-// ADMIN ROUTES
+// WEBHOOK MERCADO PAGO
 // =======================================================================
+
+app.post("/webhook", async (req, res) => {
+
+  try {
+
+    const { type, data } = req.body;
+
+    if (type === "payment") {
+
+      const paymentInfo = await payment.get({ id: data.id });
+
+      if (paymentInfo.status === "approved") {
+
+        const email = paymentInfo.payer.email.toLowerCase();
+
+        db.get(`SELECT * FROM users WHERE email=?`, [email], (err, user) => {
+
+          if (!user) return;
+
+          const expires = new Date();
+          expires.setDate(expires.getDate() + 30);
+
+          db.run(`
+            UPDATE subscriptions
+            SET status='active',
+                expires_at=?
+            WHERE user_id=?`,
+            [expires.toISOString(), user.id]
+          );
+
+        });
+
+      }
+
+    }
+
+    res.sendStatus(200);
+
+  } catch (error) {
+    console.error(error);
+    res.sendStatus(500);
+  }
+
+});
+
+// =======================================================================
+// STATUS DA ASSINATURA
+// =======================================================================
+
+app.get("/subscription/status", auth, (req, res) => {
+
+  db.get(`
+    SELECT * FROM subscriptions
+    WHERE user_id=?`,
+    [req.user.id],
+    (err, sub) => {
+
+      if (!sub)
+        return res.json({ status: "none" });
+
+      if (sub.status !== "active")
+        return res.json({ status: "inactive" });
+
+      const now = new Date();
+      const expires = new Date(sub.expires_at);
+
+      if (expires < now) {
+
+        db.run(`
+          UPDATE subscriptions
+          SET status='expired'
+          WHERE user_id=?`,
+          [req.user.id]
+        );
+
+        return res.json({ status: "expired" });
+      }
+
+      res.json({
+        status: "active",
+        expires_at: sub.expires_at
+      });
+
+    }
+  );
+
+});
+
+// =======================================================================
+// ADMIN
+// =======================================================================
+
 app.get("/admin/stats", auth, adminOnly, (req, res) => {
 
   db.get(`SELECT COUNT(*) as total FROM users`, [], (_, users) => {
     db.get(`SELECT COUNT(*) as total FROM subscriptions WHERE status='active'`, [], (_, active) => {
       db.get(`SELECT COUNT(*) as total FROM subscriptions WHERE status='pending'`, [], (_, pending) => {
 
-        const receita = active.total * 70;
-
         res.json({
           users: users.total,
           active: active.total,
           pending: pending.total,
-          receita_mensal: receita
+          receita_mensal: active.total * PLAN_PRICE
         });
 
       });
@@ -239,23 +327,10 @@ app.get("/admin/stats", auth, adminOnly, (req, res) => {
 
 });
 
-app.get("/admin/users", auth, adminOnly, (req, res) => {
-
-  db.all(`
-    SELECT users.id, users.name, users.email,
-    subscriptions.status
-    FROM users
-    LEFT JOIN subscriptions ON users.id = subscriptions.user_id
-    ORDER BY users.id DESC
-  `, [], (_, rows) => {
-    res.json(rows);
-  });
-
-});
-
 // =======================================================================
 // STATIC
 // =======================================================================
+
 app.use(express.static(PUBLIC_DIR));
 
 app.get("/*", (_, res) => {
@@ -263,6 +338,7 @@ app.get("/*", (_, res) => {
 });
 
 // =======================================================================
+
 app.listen(PORT, () => {
   console.log(`🚀 Aldra ONLINE na porta ${PORT}`);
 });
