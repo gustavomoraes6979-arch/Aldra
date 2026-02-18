@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (ADMIN 100% BLINDADO)
+// Aldra — server.js (ADMIN 100% BLINDADO + API ME)
 // =======================================================================
 
 import express from "express";
@@ -86,6 +86,7 @@ db.serialize(() => {
 // MIDDLEWARE AUTH
 // =======================================================================
 function auth(req, res, next) {
+
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {
@@ -98,8 +99,13 @@ function auth(req, res, next) {
       process.env.JWT_SECRET
     );
 
-    // Buscar usuário real no banco
     db.get(`SELECT * FROM users WHERE id=?`, [decoded.id], (err, user) => {
+
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Erro interno" });
+      }
+
       if (!user) {
         return res.status(401).json({ error: "Usuário inválido" });
       }
@@ -118,7 +124,6 @@ function auth(req, res, next) {
 // =======================================================================
 function adminOnly(req, res, next) {
 
-  // ADMIN SOMENTE PELO EMAIL FIXO
   if (req.user.email !== ADMIN_EMAIL) {
     return res.status(403).json({ error: "Acesso restrito ao proprietário" });
   }
@@ -130,6 +135,7 @@ function adminOnly(req, res, next) {
 // AUTH
 // =======================================================================
 app.post("/auth/register", (req, res) => {
+
   const { name = "", email, password } = req.body;
 
   if (!email || !password) {
@@ -142,7 +148,10 @@ app.post("/auth/register", (req, res) => {
     `INSERT INTO users (name,email,password) VALUES (?,?,?)`,
     [name, email, hash],
     function (err) {
-      if (err) return res.status(400).json({ error: "Email já existe" });
+
+      if (err) {
+        return res.status(400).json({ error: "Email já existe" });
+      }
 
       db.run(
         `INSERT INTO subscriptions (user_id,status)
@@ -156,11 +165,18 @@ app.post("/auth/register", (req, res) => {
 });
 
 app.post("/auth/login", (req, res) => {
+
   const { email, password } = req.body;
 
-  db.get(`SELECT * FROM users WHERE email=?`, [email], (_, user) => {
+  db.get(`SELECT * FROM users WHERE email=?`, [email], (err, user) => {
 
-    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
+    if (err) {
+      return res.status(500).json({ error: "Erro interno" });
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
 
     if (!bcrypt.compareSync(password, user.password)) {
       return res.status(401).json({ error: "Senha incorreta" });
@@ -172,10 +188,22 @@ app.post("/auth/login", (req, res) => {
       { expiresIn: "7d" }
     );
 
-    // Role agora é calculado dinamicamente
-    const role = user.email === ADMIN_EMAIL ? "admin" : "user";
+    const isAdmin = user.email === ADMIN_EMAIL;
 
-    res.json({ token, role });
+    res.json({ token, isAdmin });
+  });
+});
+
+// =======================================================================
+// API ME (para dashboard mostrar botão admin)
+// =======================================================================
+app.get("/api/me", auth, (req, res) => {
+
+  const isAdmin = req.user.email === ADMIN_EMAIL;
+
+  res.json({
+    email: req.user.email,
+    isAdmin
   });
 });
 
@@ -204,6 +232,7 @@ app.get("/admin/stats", auth, adminOnly, (req, res) => {
 });
 
 app.get("/admin/users", auth, adminOnly, (req, res) => {
+
   db.all(`
     SELECT users.id, users.name, users.email,
     subscriptions.status
@@ -213,6 +242,7 @@ app.get("/admin/users", auth, adminOnly, (req, res) => {
   `, [], (_, rows) => {
     res.json(rows);
   });
+
 });
 
 // =======================================================================

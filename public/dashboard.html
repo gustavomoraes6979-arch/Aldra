@@ -23,7 +23,6 @@ body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
 }
 
-/* HEADER */
 header{
   background:var(--white);
   padding:18px 32px;
@@ -64,7 +63,6 @@ button{
   color:white;
 }
 
-/* ALERT ASSINATURA */
 .alert{
   background:#fff3cd;
   color:#856404;
@@ -83,7 +81,6 @@ button{
   margin-top:15px;
 }
 
-/* MENU */
 .menu{
   display:flex;
   flex-wrap:wrap;
@@ -98,7 +95,6 @@ button{
   color:white;
 }
 
-/* SECTION */
 .section{
   background:var(--white);
   margin:30px;
@@ -136,7 +132,6 @@ th{
   background:#f1f4f8;
 }
 
-/* PIX */
 .pix-box{
   margin-top:20px;
   background:white;
@@ -218,26 +213,36 @@ if(!token){
 }
 
 // =========================
-// DECODIFICAR TOKEN
+// VERIFICAR ADMIN VIA API
 // =========================
-function parseJwt (t){
+async function verificarAdmin(){
   try{
-    return JSON.parse(atob(t.split('.')[1]));
+    const res = await fetch("/api/me",{
+      headers:{ Authorization:"Bearer "+token }
+    });
+
+    if(res.status===401){
+      logout();
+      return;
+    }
+
+    const data = await res.json();
+
+    if(data.isAdmin){
+      document.getElementById("adminBtn").style.display="inline-block";
+    }
+
   }catch{
-    return null;
+    logout();
   }
 }
 
-const user = parseJwt(token);
-
-// Mostrar botão admin se for admin
-if(user?.role === "admin"){
-  document.getElementById("adminBtn").style.display="inline-block";
-}
+verificarAdmin();
 
 // =========================
-// VERIFICAR ASSINATURA
+// RESTANTE DO CÓDIGO
 // =========================
+
 async function verificarAssinatura(){
   const res = await fetch("/subscription/status",{
     headers:{ Authorization:"Bearer "+token }
@@ -258,102 +263,23 @@ async function verificarAssinatura(){
 
 verificarAssinatura();
 
-// =========================
-// GERAR PIX
-// =========================
-async function gerarPix(){
-  const res = await fetch("/api/create-pix",{
-    method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      Authorization:"Bearer "+token
-    }
-  });
-
-  const data = await res.json();
-
-  document.getElementById("pixBox").style.display="block";
-  document.getElementById("qrImage").src =
-    "data:image/png;base64,"+data.qr_code_base64;
-  document.getElementById("pixCode").value=data.qr_code;
+function irAdmin(){
+  window.location.href="/admin.html";
 }
 
-// =========================
-// CRM
-// =========================
-async function carregarCRM(){
-  const res = await fetch("/api/crm",{
-    headers:{ Authorization:"Bearer "+token }
-  });
-
-  if(res.status!==200) return;
-
-  const data = await res.json();
-  const tbody = document.getElementById("crmLista");
-  tbody.innerHTML="";
-
-  data.forEach(c=>{
-    tbody.innerHTML+=`
-      <tr>
-        <td>${c.name}</td>
-        <td>${c.email}</td>
-        <td>${c.phone||""}</td>
-      </tr>
-    `;
-  });
+function logout(){
+  localStorage.removeItem("token");
+  window.location.href="/";
 }
 
-async function salvarCliente(){
-  const nome=document.getElementById("crmNome").value;
-  const email=document.getElementById("crmEmail").value;
-  const telefone=document.getElementById("crmTelefone").value;
-
-  await fetch("/api/crm",{
-    method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      Authorization:"Bearer "+token
-    },
-    body:JSON.stringify({ name:nome,email,phone:telefone })
-  });
-
-  document.getElementById("crmNome").value="";
-  document.getElementById("crmEmail").value="";
-  document.getElementById("crmTelefone").value="";
-
-  carregarCRM();
-}
-
-// =========================
-// MENU
-// =========================
 function showSection(name){
   document.querySelectorAll(".section").forEach(sec=>
     sec.classList.remove("active")
   );
   document.getElementById("section"+name).classList.add("active");
-
-  if(name==="CRM"){
-    carregarCRM();
-  }
 }
 
 showSection("PDF");
-
-// =========================
-// ADMIN
-// =========================
-function irAdmin(){
-  window.location.href="/admin.html";
-}
-
-// =========================
-// LOGOUT
-// =========================
-function logout(){
-  localStorage.removeItem("token");
-  window.location.href="/";
-}
 </script>
 
 </body>
