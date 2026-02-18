@@ -179,7 +179,7 @@ th{
 <button onclick="showSection('CRM')">👥 CRM</button>
 </div>
 
-<div id="sectionPDF" class="section"><h2>📄 Análise de PDF</h2></div>
+<div id="sectionPDF" class="section active"><h2>📄 Análise de PDF</h2></div>
 <div id="sectionContrato" class="section"><h2>📝 Gerador de Contratos</h2></div>
 <div id="sectionCobranca" class="section"><h2>💳 Cobrança</h2></div>
 <div id="sectionRelatorios" class="section"><h2>📊 Relatórios</h2></div>
@@ -187,22 +187,6 @@ th{
 
 <div id="sectionCRM" class="section">
 <h2>👥 CRM</h2>
-
-<input id="crmNome" placeholder="Nome do cliente">
-<input id="crmEmail" placeholder="E-mail">
-<input id="crmTelefone" placeholder="Telefone">
-<button class="action" onclick="salvarCliente()">Salvar Cliente</button>
-
-<table>
-<thead>
-<tr>
-<th>Nome</th>
-<th>Email</th>
-<th>Telefone</th>
-</tr>
-</thead>
-<tbody id="crmLista"></tbody>
-</table>
 </div>
 
 <script>
@@ -240,9 +224,8 @@ async function verificarAdmin(){
 verificarAdmin();
 
 // =========================
-// RESTANTE DO CÓDIGO
+// ASSINATURA
 // =========================
-
 async function verificarAssinatura(){
   const res = await fetch("/subscription/status",{
     headers:{ Authorization:"Bearer "+token }
@@ -263,23 +246,30 @@ async function verificarAssinatura(){
 
 verificarAssinatura();
 
+// =========================
+// ADMIN → REDIRECIONA PARA CONFIRMAÇÃO
+// =========================
 function irAdmin(){
-  window.location.href="/admin.html";
+  window.location.href="/admin-auth.html";
 }
 
+// =========================
+// LOGOUT
+// =========================
 function logout(){
   localStorage.removeItem("token");
   window.location.href="/";
 }
 
+// =========================
+// MENU
+// =========================
 function showSection(name){
   document.querySelectorAll(".section").forEach(sec=>
     sec.classList.remove("active")
   );
   document.getElementById("section"+name).classList.add("active");
 }
-
-showSection("PDF");
 </script>
 
 </body>

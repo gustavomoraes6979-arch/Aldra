@@ -17,7 +17,7 @@ dotenv.config();
 // =======================================================================
 // CONFIG
 // =======================================================================
-const ADMIN_EMAIL = "moraes_gu@hotmail.com";
+const ADMIN_EMAIL = "moraes_gu@hotmail.com".toLowerCase();
 
 if (!process.env.JWT_SECRET) {
   console.error("❌ JWT_SECRET não definido");
@@ -124,7 +124,7 @@ function auth(req, res, next) {
 // =======================================================================
 function adminOnly(req, res, next) {
 
-  if (req.user.email !== ADMIN_EMAIL) {
+  if (!req.user || req.user.email.toLowerCase() !== ADMIN_EMAIL) {
     return res.status(403).json({ error: "Acesso restrito ao proprietário" });
   }
 
@@ -136,11 +136,13 @@ function adminOnly(req, res, next) {
 // =======================================================================
 app.post("/auth/register", (req, res) => {
 
-  const { name = "", email, password } = req.body;
+  let { name = "", email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: "Dados inválidos" });
   }
+
+  email = email.toLowerCase().trim();
 
   const hash = bcrypt.hashSync(password, 10);
 
@@ -166,7 +168,13 @@ app.post("/auth/register", (req, res) => {
 
 app.post("/auth/login", (req, res) => {
 
-  const { email, password } = req.body;
+  let { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: "Dados inválidos" });
+  }
+
+  email = email.toLowerCase().trim();
 
   db.get(`SELECT * FROM users WHERE email=?`, [email], (err, user) => {
 
@@ -188,18 +196,18 @@ app.post("/auth/login", (req, res) => {
       { expiresIn: "7d" }
     );
 
-    const isAdmin = user.email === ADMIN_EMAIL;
+    const isAdmin = user.email.toLowerCase() === ADMIN_EMAIL;
 
     res.json({ token, isAdmin });
   });
 });
 
 // =======================================================================
-// API ME (para dashboard mostrar botão admin)
+// API ME
 // =======================================================================
 app.get("/api/me", auth, (req, res) => {
 
-  const isAdmin = req.user.email === ADMIN_EMAIL;
+  const isAdmin = req.user.email.toLowerCase() === ADMIN_EMAIL;
 
   res.json({
     email: req.user.email,

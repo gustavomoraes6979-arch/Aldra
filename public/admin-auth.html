@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Verificação Administrador</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#f4f6f9;">
+
+  <div style="background:white;padding:30px;border-radius:10px;box-shadow:0 5px 20px rgba(0,0,0,0.1);width:350px;text-align:center;">
+    <h2>🔐 Área Administrativa</h2>
+    <p>Digite seu email para confirmar acesso</p>
+
+    <input type="email" id="adminEmail" placeholder="Seu email"
+      style="width:100%;padding:10px;margin-top:15px;border-radius:6px;border:1px solid #ccc;">
+
+    <button onclick="verificarAdmin()"
+      style="margin-top:15px;width:100%;padding:10px;background:#1a73e8;color:white;border:none;border-radius:6px;cursor:pointer;">
+      Confirmar
+    </button>
+
+    <p id="erro" style="color:red;margin-top:10px;"></p>
+  </div>
+
+<script>
+function verificarAdmin() {
+
+  const emailDigitado = document.getElementById("adminEmail").value.trim().toLowerCase();
+  const emailAdmin = "moraes_gu@hotmail.com";
+
+  if (emailDigitado === emailAdmin) {
+    window.location.href = "/admin.html";
+  } else {
+    document.getElementById("erro").innerText = "Email não autorizado.";
+  }
+}
+</script>
+
+</body>
+</html>

@@ -24,7 +24,6 @@ body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;
 }
 
-/* HEADER */
 header{
   background:var(--white);
   padding:18px 32px;
@@ -69,12 +68,10 @@ button{
   color:white;
 }
 
-/* CONTAINER */
 .container{
   padding:35px;
 }
 
-/* STATS */
 .stats{
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
@@ -101,7 +98,6 @@ button{
   color:var(--azul);
 }
 
-/* TABLE */
 table{
   width:100%;
   background:var(--white);
@@ -187,27 +183,40 @@ if(!token){
   window.location.href="/";
 }
 
-// =========================
-// VALIDAR ADMIN
-// =========================
-function parseJwt(t){
+// ===============================
+// VALIDAÇÃO REAL VIA BACKEND
+// ===============================
+async function validarAdmin(){
+
   try{
-    return JSON.parse(atob(t.split('.')[1]));
+
+    const res = await fetch("/api/me",{
+      headers:{ Authorization:"Bearer "+token }
+    });
+
+    if(res.status === 401){
+      logout();
+      return;
+    }
+
+    const data = await res.json();
+
+    if(!data.isAdmin){
+      alert("Acesso restrito ao administrador");
+      window.location.href="/dashboard.html";
+      return;
+    }
+
   }catch{
-    return null;
+    logout();
   }
 }
 
-const user = parseJwt(token);
+validarAdmin();
 
-if(!user || user.role !== "admin"){
-  alert("Acesso restrito ao administrador");
-  window.location.href="/dashboard.html";
-}
-
-// =========================
+// ===============================
 // LOGOUT
-// =========================
+// ===============================
 function logout(){
   localStorage.removeItem("token");
   window.location.href="/";
