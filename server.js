@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (COM PAGAMENTO PIX FUNCIONANDO)
+// Aldra — server.js (VERSÃO COMPLETA + ADMIN FUNCIONANDO)
 // =======================================================================
 
 import express from "express";
@@ -25,9 +25,8 @@ if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
 if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
 
 const client = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN.trim()
+  accessToken: process.env.MP_ACCESS_TOKEN.trim(),
 });
-
 const payment = new Payment(client);
 
 // =======================================================================
@@ -86,114 +85,169 @@ function auth(req, res, next) {
       process.env.JWT_SECRET
     );
 
-    db.get(`SELECT * FROM users WHERE id=?`, [decoded.id], (err, user) => {
-      if (err) return res.status(500).json({ error: "Erro interno" });
-      if (!user) return res.status(401).json({ error: "Usuário inválido" });
+    db.get(
+      `SELECT * FROM users WHERE id=?`,
+      [decoded.id],
+      (err, user) => {
+        if (err) {
+          console.error("Erro DB auth:", err);
+          return res.status(500).json({ error: "Erro interno" });
+        }
 
-      req.user = user;
-      req.user.is_admin = user.email === ADMIN_EMAIL;
+        if (!user)
+          return res.status(401).json({ error: "Usuário inválido" });
 
-      next();
-    });
-  } catch {
+        req.user = user;
+        req.user.is_admin = user.email === ADMIN_EMAIL;
+        next();
+      }
+    );
+  } catch (e) {
     return res.status(401).json({ error: "Token inválido" });
   }
 }
 
 // =======================================================================
-// 🔥 ROTA /api/me (ESSENCIAL)
+// ADMIN MIDDLEWARE
 // =======================================================================
 
-app.get("/api/me", auth, (req, res) => {
-  res.json({
-    id: req.user.id,
-    email: req.user.email,
-    isAdmin: req.user.is_admin
-  });
-});
+function adminOnly(req, res, next) {
+  if (!req.user?.is_admin)
+    return res.status(403).json({ error: "Acesso restrito" });
+  next();
+}
 
 // =======================================================================
-// 🔥 STATUS DA ASSINATURA
+// REGISTER
 // =======================================================================
 
-app.get("/subscription/status", auth, (req, res) => {
-  db.get(
-    `SELECT * FROM subscriptions WHERE user_id=?`,
-    [req.user.id],
-    (err, sub) => {
-      if (err) return res.status(500).json({ error: "Erro DB" });
+app.post("/auth/register", (req, res) => {
+  let { name = "", email, password } = req.body;
 
-      if (!sub) {
-        return res.json({ status: "pending" });
-      }
+  if (!email || !password)
+    return res.status(400).json({ error: "Dados inválidos" });
 
-      res.json({
-        status: sub.status,
-        payment_id: sub.payment_id
-      });
+  email = email.toLowerCase().trim();
+  const hash = bcrypt.hashSync(password, 10);
+
+  db.run(
+    `INSERT INTO users (name,email,password) VALUES (?,?,?)`,
+    [name, email, hash],
+    function (err) {
+      if (err)
+        return res.status(400).json({ error: "Email já existe" });
+
+      db.run(
+        `INSERT INTO subscriptions (user_id,status) VALUES (?, 'pending')`,
+        [this.lastID]
+      );
+
+      res.json({ success: true });
     }
   );
 });
 
 // =======================================================================
-// 🔥 CRIAR PAGAMENTO PIX
+// LOGIN
 // =======================================================================
 
-app.post("/create-payment", auth, async (req, res) => {
-  try {
-    const body = {
-      transaction_amount: PLAN_PRICE,
-      description: "Assinatura Aldra",
-      payment_method_id: "pix",
-      payer: {
-        email: req.user.email
+app.post("/auth/login", (req, res) => {
+  let { email, password } = req.body;
+
+  if (!email || !password)
+    return res.status(400).json({ error: "Dados inválidos" });
+
+  email = email.toLowerCase().trim();
+
+  db.get(
+    `SELECT * FROM users WHERE email=?`,
+    [email],
+    (err, user) => {
+      if (err) {
+        console.error("Erro login:", err);
+        return res.status(500).json({ error: "Erro interno" });
       }
-    };
 
-    const result = await payment.create({ body });
+      if (!user)
+        return res.status(404).json({ error: "Usuário não encontrado" });
 
-    const paymentId = result.id;
+      if (!bcrypt.compareSync(password, user.password))
+        return res.status(401).json({ error: "Senha incorreta" });
 
-    db.run(
-      `UPDATE subscriptions
-       SET payment_id=?, status='pending'
-       WHERE user_id=?`,
-      [paymentId, req.user.id]
-    );
+      const isAdmin = user.email === ADMIN_EMAIL;
 
-    res.json(result);
-  } catch (err) {
-    console.error("Erro criar pagamento:", err);
-    res.status(500).json({ error: "Erro ao gerar pagamento" });
-  }
+      const token = jwt.sign(
+        { id: user.id, is_admin: isAdmin },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
+
+      res.json({ token, is_admin: isAdmin });
+    }
+  );
 });
 
 // =======================================================================
-// 🔥 WEBHOOK MERCADO PAGO (CONFIRMA PAGAMENTO)
+// ========================== ADMIN ROTAS ================================
 // =======================================================================
 
-app.post("/webhook/mp", async (req, res) => {
-  try {
-    const paymentId = req.body?.data?.id;
-    if (!paymentId) return res.sendStatus(200);
+// STATS
+app.get("/admin/stats", auth, adminOnly, (req, res) => {
+  db.get(`SELECT COUNT(*) as total FROM users`, (err, totalUsers) => {
+    db.get(
+      `SELECT COUNT(*) as active FROM subscriptions WHERE status='active'`,
+      (err2, activeUsers) => {
+        db.get(
+          `SELECT COUNT(*) as pending FROM subscriptions WHERE status='pending'`,
+          (err3, pendingUsers) => {
+            const receita = (activeUsers?.active || 0) * PLAN_PRICE;
 
-    const result = await payment.get({ id: paymentId });
+            res.json({
+              users: totalUsers?.total || 0,
+              active: activeUsers?.active || 0,
+              pending: pendingUsers?.pending || 0,
+              receita_mensal: receita,
+            });
+          }
+        );
+      }
+    );
+  });
+});
 
-    if (result.status === "approved") {
-      db.run(
-        `UPDATE subscriptions
-         SET status='active',
-             expires_at=datetime('now','+30 day')
-         WHERE payment_id=?`,
-        [paymentId]
-      );
+// LISTAR USUÁRIOS
+app.get("/admin/users", auth, adminOnly, (req, res) => {
+  db.all(
+    `SELECT u.id, u.name, u.email, s.status
+     FROM users u
+     LEFT JOIN subscriptions s ON u.id = s.user_id`,
+    (err, rows) => {
+      if (err) {
+        console.error("Erro admin users:", err);
+        return res.status(500).json({ error: "Erro ao buscar usuários" });
+      }
+
+      res.json(rows);
     }
+  );
+});
 
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("Erro webhook:", err);
-    res.sendStatus(500);
-  }
+// CANCELAR ASSINATURA
+app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
+  db.run(
+    `UPDATE subscriptions
+     SET status='pending', payment_id=NULL, expires_at=NULL
+     WHERE user_id=?`,
+    [req.params.id],
+    function (err) {
+      if (err) {
+        console.error("Erro cancelar:", err);
+        return res.status(500).json({ error: "Erro ao cancelar" });
+      }
+
+      res.json({ success: true });
+    }
+  );
 });
 
 // =======================================================================
