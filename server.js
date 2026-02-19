@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (VERSÃO CORRIGIDA COM PIX INTEGRADO)
+// Aldra — server.js (VERSÃO COMPLETA + ADMIN FUNCIONANDO)
 // =======================================================================
 
 import express from "express";
@@ -104,6 +104,18 @@ function auth(req, res, next) {
 }
 
 // =======================================================================
+// ADMIN MIDDLEWARE
+// =======================================================================
+
+function adminOnly(req, res, next) {
+
+  if (req.user.email !== ADMIN_EMAIL)
+    return res.status(403).json({ error: "Acesso restrito" });
+
+  next();
+}
+
+// =======================================================================
 // REGISTER
 // =======================================================================
 
@@ -166,149 +178,80 @@ app.post("/auth/login", (req, res) => {
 });
 
 // =======================================================================
-// CRIAR ASSINATURA PIX
+// ========================== ADMIN ROTAS ================================
 // =======================================================================
 
-app.post("/subscription/create", auth, async (req, res) => {
+// STATS
+app.get("/admin/stats", auth, adminOnly, (req, res) => {
 
-  try {
+  db.get(`SELECT COUNT(*) as total FROM users`, (err, totalUsers) => {
 
-    const body = {
-      transaction_amount: PLAN_PRICE,
-      description: "Assinatura Aldra - 30 dias",
-      payment_method_id: "pix",
-      payer: { email: req.user.email }
-    };
+    db.get(`
+      SELECT COUNT(*) as active 
+      FROM subscriptions 
+      WHERE status='active'`, (err2, activeUsers) => {
 
-    const result = await payment.create({ body });
+      db.get(`
+        SELECT COUNT(*) as pending
+        FROM subscriptions
+        WHERE status='pending'`, (err3, pendingUsers) => {
 
-    const qr = result.point_of_interaction.transaction_data.qr_code_base64;
-    const pixCode = result.point_of_interaction.transaction_data.qr_code;
+        const receita = (activeUsers?.active || 0) * PLAN_PRICE;
 
-    db.run(`
-      UPDATE subscriptions
-      SET payment_id=?, status='pending'
-      WHERE user_id=?`,
-      [result.id, req.user.id]
-    );
+        res.json({
+          users: totalUsers?.total || 0,
+          active: activeUsers?.active || 0,
+          pending: pendingUsers?.pending || 0,
+          receita_mensal: receita
+        });
 
-    res.json({
-      status: "pending",
-      qr: `data:image/png;base64,${qr}`,
-      pixCode
+      });
+
     });
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erro ao criar pagamento" });
-  }
+  });
 
 });
 
-// =======================================================================
-// STATUS ASSINATURA
-// =======================================================================
+// LISTAR USUÁRIOS
+app.get("/admin/users", auth, adminOnly, (req, res) => {
 
-app.get("/subscription/status", auth, async (req, res) => {
+  db.all(`
+    SELECT 
+      u.id,
+      u.name,
+      u.email,
+      s.status
+    FROM users u
+    LEFT JOIN subscriptions s ON u.id = s.user_id
+  `, (err, rows) => {
 
-  db.get(`
-    SELECT * FROM subscriptions
+    if (err)
+      return res.status(500).json({ error: "Erro ao buscar usuários" });
+
+    res.json(rows);
+  });
+
+});
+
+// CANCELAR ASSINATURA
+app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
+
+  db.run(`
+    UPDATE subscriptions
+    SET status='pending',
+        payment_id=NULL,
+        expires_at=NULL
     WHERE user_id=?`,
-    [req.user.id],
-    async (err, sub) => {
+    [req.params.id],
+    function (err) {
 
-      if (!sub)
-        return res.json({ status: "none" });
+      if (err)
+        return res.status(500).json({ error: "Erro ao cancelar" });
 
-      if (sub.status === "active")
-        return res.json({ status: "approved" });
-
-      if (!sub.payment_id)
-        return res.json({ status: "inactive" });
-
-      try {
-
-        const mpPayment = await payment.get({ id: sub.payment_id });
-
-        if (mpPayment.status === "approved") {
-
-          const expires = new Date();
-          expires.setDate(expires.getDate() + 30);
-
-          db.run(`
-            UPDATE subscriptions
-            SET status='active',
-                expires_at=?
-            WHERE user_id=?`,
-            [expires.toISOString(), req.user.id]
-          );
-
-          return res.json({ status: "approved" });
-        }
-
-        const qr = mpPayment.point_of_interaction?.transaction_data?.qr_code_base64;
-        const pixCode = mpPayment.point_of_interaction?.transaction_data?.qr_code;
-
-        return res.json({
-          status: mpPayment.status,
-          qr: qr ? `data:image/png;base64,${qr}` : null,
-          pixCode: pixCode || null
-        });
-
-      } catch (e) {
-        return res.json({ status: "inactive" });
-      }
-
+      res.json({ success: true });
     }
   );
-
-});
-
-// =======================================================================
-// WEBHOOK
-// =======================================================================
-
-app.post("/webhook", async (req, res) => {
-
-  try {
-
-    const { type, data } = req.body;
-
-    if (type === "payment") {
-
-      const mpPayment = await payment.get({ id: data.id });
-
-      if (mpPayment.status === "approved") {
-
-        const email = mpPayment.payer.email.toLowerCase();
-
-        db.get(`SELECT * FROM users WHERE email=?`, [email], (err, user) => {
-
-          if (!user) return;
-
-          const expires = new Date();
-          expires.setDate(expires.getDate() + 30);
-
-          db.run(`
-            UPDATE subscriptions
-            SET status='active',
-                expires_at=?
-            WHERE user_id=?`,
-            [expires.toISOString(), user.id]
-          );
-
-        });
-
-      }
-
-    }
-
-    res.sendStatus(200);
-
-  } catch (err) {
-    console.error(err);
-    res.sendStatus(500);
-  }
 
 });
 

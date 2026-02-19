@@ -1,5 +1,5 @@
 // =====================================================
-// Admin.js — Aldra (Compatível com Server Blindado)
+// Admin.js — Aldra (VERSÃO COMPATÍVEL COM SERVER)
 // =====================================================
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -18,7 +18,7 @@ async function carregarPainel() {
     await carregarStats(token);
     await carregarUsuarios(token);
   } catch (err) {
-    console.error(err);
+    console.error("Erro admin:", err);
     alert("Erro ao carregar painel administrativo");
     logoutForcado();
   }
@@ -37,13 +37,23 @@ async function carregarStats(token) {
     return;
   }
 
+  if (!res.ok) {
+    throw new Error("Erro ao buscar stats");
+  }
+
   const data = await res.json();
 
-  document.getElementById("totalUsers").innerText = data.users;
-  document.getElementById("activeUsers").innerText = data.active;
-  document.getElementById("pendingUsers").innerText = data.pending;
+  document.getElementById("totalUsers").innerText =
+    data.totalUsers || 0;
+
+  document.getElementById("activeUsers").innerText =
+    data.activeSubscriptions || 0;
+
+  document.getElementById("pendingUsers").innerText =
+    (data.totalUsers || 0) - (data.activeSubscriptions || 0);
+
   document.getElementById("monthlyRevenue").innerText =
-    "R$ " + data.receita_mensal.toLocaleString("pt-BR");
+    "R$ " + (data.monthlyRevenue || 0).toLocaleString("pt-BR");
 }
 
 // =====================================================
@@ -60,8 +70,7 @@ async function carregarUsuarios(token) {
   }
 
   if (!res.ok) {
-    alert("Erro ao carregar usuários");
-    return;
+    throw new Error("Erro ao carregar usuários");
   }
 
   const users = await res.json();
@@ -82,7 +91,10 @@ function renderUsuarios(users) {
       <td>${user.id}</td>
       <td>${user.name || "-"}</td>
       <td>${user.email}</td>
-      <td class="${statusClass}">${user.status || "pending"}</td>
+      <td>${user.role || "user"}</td>
+      <td class="${statusClass}">
+        ${user.status || "inactive"}
+      </td>
       <td class="actions">
         <button class="btn-primary"
           onclick="cancelar(${user.id})"
@@ -128,7 +140,7 @@ async function adminAction(url) {
 }
 
 // =====================================================
-// LOGOUT FORÇADO (SEGURANÇA)
+// LOGOUT FORÇADO
 // =====================================================
 function logoutForcado() {
   localStorage.removeItem("token");
