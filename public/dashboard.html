@@ -212,7 +212,6 @@ Assinar Plano Mensal — R$ 70,00
 </thead>
 <tbody id="crmLista"></tbody>
 </table>
-
 </div>
 
 <script>
@@ -221,6 +220,7 @@ Assinar Plano Mensal — R$ 70,00
 // PROTEÇÃO LOGIN
 // ===============================
 const token = localStorage.getItem("token");
+
 if(!token){
   window.location.href="/";
 }
@@ -244,16 +244,44 @@ function showSection(name){
 }
 
 // ===============================
-// VERIFICAR ASSINATURA AO ENTRAR
+// MOSTRAR PIX
+// ===============================
+function mostrarPix(qr, pixCode){
+  const alertBox = document.getElementById("alert");
+  const pixBox = document.getElementById("pixBox");
+
+  alertBox.style.display = "block";
+  pixBox.style.display = "block";
+
+  if(qr){
+    document.getElementById("qrImage").src = qr;
+  }
+
+  if(pixCode){
+    document.getElementById("pixCode").value = pixCode;
+  }
+}
+
+// ===============================
+// VERIFICAR ASSINATURA
 // ===============================
 async function verificarAssinatura(){
-
   try{
     const res = await fetch("/subscription/status",{
-      headers:{ Authorization:"Bearer "+token }
+      method:"GET",
+      headers:{
+        Authorization:"Bearer "+token,
+        "Content-Type":"application/json"
+      }
     });
 
+    if(!res.ok){
+      console.log("Status não OK:", res.status);
+      return;
+    }
+
     const data = await res.json();
+    console.log("STATUS:", data);
 
     const status = data.status;
 
@@ -262,24 +290,15 @@ async function verificarAssinatura(){
       return;
     }
 
-    if(["pending","in_process","authorized"].includes(status)){
-      document.getElementById("alert").style.display="block";
-      document.getElementById("pixBox").style.display="block";
-
-      if(data.qr){
-        document.getElementById("qrImage").src = data.qr;
-      }
-
-      if(data.pixCode){
-        document.getElementById("pixCode").value = data.pixCode;
-      }
+    if(data.qr || data.pixCode){
+      mostrarPix(data.qr, data.pixCode);
       return;
     }
 
     document.getElementById("alert").style.display="block";
 
   }catch(e){
-    console.log("Erro ao verificar assinatura");
+    console.error("Erro ao verificar assinatura:", e);
   }
 }
 
@@ -289,19 +308,24 @@ verificarAssinatura();
 // ATIVAR PLANO
 // ===============================
 async function ativarPlano(){
+  try{
+    const res = await fetch("/subscription/create",{
+      method:"POST",
+      headers:{
+        Authorization:"Bearer "+token,
+        "Content-Type":"application/json"
+      }
+    });
 
-  const res = await fetch("/subscription/create",{
-    method:"POST",
-    headers:{ Authorization:"Bearer "+token }
-  });
+    const data = await res.json();
+    console.log("CRIAR:", data);
 
-  const data = await res.json();
+    if(data.qr || data.pixCode){
+      mostrarPix(data.qr, data.pixCode);
+    }
 
-  if(data.qr){
-    document.getElementById("alert").style.display="block";
-    document.getElementById("pixBox").style.display="block";
-    document.getElementById("qrImage").src = data.qr;
-    document.getElementById("pixCode").value = data.pixCode;
+  }catch(e){
+    console.error("Erro ao criar assinatura:", e);
   }
 }
 

@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — Aldra SaaS Profissional
+// dashboard.js — Aldra SaaS Profissional (PIX RESTAURADO)
 // ==========================================
 
 (function () {
@@ -14,6 +14,11 @@
 
   const alertBox = document.getElementById("alert");
   const crmLista = document.getElementById("crmLista");
+
+  // 🔥 elementos PIX (podem não existir em algumas telas)
+  const pixBox = document.getElementById("pixBox");
+  const pixQr = document.getElementById("pixQr");
+  const pixCopiaCola = document.getElementById("pixCopiaCola");
 
   let subscriptionActive = false;
   let isAdmin = false;
@@ -87,7 +92,7 @@
   }
 
   // ==========================================
-  // PAGAMENTO
+  // 🔥 PAGAMENTO PIX (CORRIGIDO)
   // ==========================================
   window.ativarPlano = async function () {
 
@@ -106,11 +111,25 @@
 
       const data = await res.json();
 
-      if (data.point_of_interaction?.transaction_data?.qr_code_base64) {
-        alert("Pagamento PIX gerado. Verifique o QR Code retornado pela API.");
-      } else {
-        alert("Pagamento criado com sucesso.");
+      const pixData =
+        data.point_of_interaction?.transaction_data;
+
+      // ✅ MOSTRAR QR CODE
+      if (pixData?.qr_code_base64 && pixQr) {
+        pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
       }
+
+      // ✅ MOSTRAR COPIA E COLA
+      if (pixData?.qr_code && pixCopiaCola) {
+        pixCopiaCola.value = pixData.qr_code;
+      }
+
+      // ✅ MOSTRAR BOX
+      if (pixBox) {
+        pixBox.style.display = "block";
+      }
+
+      console.log("✅ PIX gerado com sucesso");
 
     } catch (err) {
       console.error(err);
@@ -252,7 +271,7 @@
   };
 
   // ==========================================
-  // INICIALIZAÇÃO
+  // INIT
   // ==========================================
   async function init() {
     await loadUser();
