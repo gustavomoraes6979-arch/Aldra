@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — Aldra SaaS Profissional (PIX RESTAURADO)
+// dashboard.js — Aldra SaaS Profissional (PIX FIX FINAL)
 // ==========================================
 
 (function () {
@@ -15,10 +15,10 @@
   const alertBox = document.getElementById("alert");
   const crmLista = document.getElementById("crmLista");
 
-  // 🔥 elementos PIX (podem não existir em algumas telas)
+  // ✅ IDs REAIS do seu HTML
   const pixBox = document.getElementById("pixBox");
-  const pixQr = document.getElementById("pixQr");
-  const pixCopiaCola = document.getElementById("pixCopiaCola");
+  const pixQr = document.getElementById("qrImage");
+  const pixCopiaCola = document.getElementById("pixCode");
 
   let subscriptionActive = false;
   let isAdmin = false;
@@ -49,7 +49,7 @@
       isAdmin = data.isAdmin;
 
     } catch (err) {
-      console.error(err);
+      console.error("Erro loadUser:", err);
       forceLogout();
     }
   }
@@ -77,22 +77,36 @@
 
       const data = await res.json();
 
-      if (data.status === "active") {
+      console.log("📊 subscription status:", data.status);
+
+      if (data.status === "active" || data.status === "approved") {
         subscriptionActive = true;
         if (alertBox) alertBox.style.display = "none";
       } else {
         subscriptionActive = false;
         if (alertBox) alertBox.style.display = "block";
+
+        // 🔥 Se backend já mandar QR pendente
+        const pixData = data.point_of_interaction?.transaction_data;
+
+        if (pixData?.qr_code_base64 && pixQr) {
+          pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
+          if (pixBox) pixBox.style.display = "block";
+        }
+
+        if (pixData?.qr_code && pixCopiaCola) {
+          pixCopiaCola.value = pixData.qr_code;
+        }
       }
 
     } catch (err) {
-      console.error(err);
+      console.error("Erro checkSubscription:", err);
       forceLogout();
     }
   }
 
   // ==========================================
-  // 🔥 PAGAMENTO PIX (CORRIGIDO)
+  // 🔥 PAGAMENTO PIX
   // ==========================================
   window.ativarPlano = async function () {
 
@@ -111,28 +125,34 @@
 
       const data = await res.json();
 
+      console.log("💰 pagamento:", data);
+
       const pixData =
         data.point_of_interaction?.transaction_data;
 
-      // ✅ MOSTRAR QR CODE
-      if (pixData?.qr_code_base64 && pixQr) {
+      if (!pixData) {
+        alert("PIX não retornado pela API.");
+        return;
+      }
+
+      // ✅ QR
+      if (pixData.qr_code_base64 && pixQr) {
         pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
       }
 
-      // ✅ MOSTRAR COPIA E COLA
-      if (pixData?.qr_code && pixCopiaCola) {
+      // ✅ copia e cola
+      if (pixData.qr_code && pixCopiaCola) {
         pixCopiaCola.value = pixData.qr_code;
       }
 
-      // ✅ MOSTRAR BOX
-      if (pixBox) {
-        pixBox.style.display = "block";
-      }
+      // ✅ mostrar box
+      if (pixBox) pixBox.style.display = "block";
+      if (alertBox) alertBox.style.display = "block";
 
-      console.log("✅ PIX gerado com sucesso");
+      console.log("✅ PIX exibido");
 
     } catch (err) {
-      console.error(err);
+      console.error("Erro ativarPlano:", err);
       alert("Erro ao iniciar pagamento.");
     }
   };
@@ -194,6 +214,8 @@
       }
 
       const data = await res.json();
+
+      if (!crmLista) return;
 
       crmLista.innerHTML = "";
 
