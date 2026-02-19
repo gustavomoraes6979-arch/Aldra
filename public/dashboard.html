@@ -52,7 +52,6 @@ button{
   cursor:pointer;
 }
 
-/* 🔥 ADMIN SEMPRE VISÍVEL */
 .btn-admin{
   background:#111;
   color:#fff;
@@ -153,7 +152,7 @@ th{
 <header>
   <h1>🚀 Aldra — Plataforma Administrativa</h1>
   <div class="header-actions">
-    <!-- 🔥 BOTÃO ADMIN SEMPRE VISÍVEL -->
+
     <button class="btn-admin" onclick="window.location.href='/admin-auth.html'">
       🔐 Admin
     </button>
@@ -165,7 +164,10 @@ th{
 <!-- ALERTA ASSINATURA -->
 <div id="alert" class="alert">
 ⚠️ Sua assinatura não está ativa.<br><br>
-<button class="action" onclick="ativarPlano()">Assinar Plano Mensal — R$ 70,00</button>
+
+<button class="action" onclick="ativarPlano()">
+Assinar Plano Mensal — R$ 70,00
+</button>
 
 <div class="pix-box" id="pixBox">
 <h3>📲 Escaneie o QR Code</h3>
@@ -213,7 +215,97 @@ th{
 
 </div>
 
-<script src="/dashboard.js"></script>
+<script>
+
+// ===============================
+// PROTEÇÃO LOGIN
+// ===============================
+const token = localStorage.getItem("token");
+if(!token){
+  window.location.href="/";
+}
+
+// ===============================
+// LOGOUT
+// ===============================
+function logout(){
+  localStorage.removeItem("token");
+  window.location.href="/";
+}
+
+// ===============================
+// MOSTRAR SEÇÕES
+// ===============================
+function showSection(name){
+  document.querySelectorAll(".section").forEach(sec=>{
+    sec.classList.remove("active");
+  });
+  document.getElementById("section"+name).classList.add("active");
+}
+
+// ===============================
+// VERIFICAR ASSINATURA AO ENTRAR
+// ===============================
+async function verificarAssinatura(){
+
+  try{
+    const res = await fetch("/subscription/status",{
+      headers:{ Authorization:"Bearer "+token }
+    });
+
+    const data = await res.json();
+
+    const status = data.status;
+
+    if(status === "approved"){
+      document.getElementById("alert").style.display="none";
+      return;
+    }
+
+    if(["pending","in_process","authorized"].includes(status)){
+      document.getElementById("alert").style.display="block";
+      document.getElementById("pixBox").style.display="block";
+
+      if(data.qr){
+        document.getElementById("qrImage").src = data.qr;
+      }
+
+      if(data.pixCode){
+        document.getElementById("pixCode").value = data.pixCode;
+      }
+      return;
+    }
+
+    document.getElementById("alert").style.display="block";
+
+  }catch(e){
+    console.log("Erro ao verificar assinatura");
+  }
+}
+
+verificarAssinatura();
+
+// ===============================
+// ATIVAR PLANO
+// ===============================
+async function ativarPlano(){
+
+  const res = await fetch("/subscription/create",{
+    method:"POST",
+    headers:{ Authorization:"Bearer "+token }
+  });
+
+  const data = await res.json();
+
+  if(data.qr){
+    document.getElementById("alert").style.display="block";
+    document.getElementById("pixBox").style.display="block";
+    document.getElementById("qrImage").src = data.qr;
+    document.getElementById("pixCode").value = data.pixCode;
+  }
+}
+
+</script>
 
 </body>
 </html>

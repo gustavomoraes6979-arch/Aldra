@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (SaaS PROFISSIONAL + ASSINATURA REAL)
+// Aldra — server.js (VERSÃO CORRIGIDA COM PIX INTEGRADO)
 // =======================================================================
 
 import express from "express";
@@ -23,11 +23,6 @@ const PLAN_PRICE = 70;
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
 if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
-if (!process.env.BASE_URL) throw new Error("BASE_URL não definido");
-
-// =======================================================================
-// MERCADO PAGO
-// =======================================================================
 
 const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN.trim()
@@ -46,7 +41,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 // =======================================================================
 // DATABASE
@@ -70,6 +64,7 @@ db.serialize(() => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER UNIQUE,
       status TEXT DEFAULT 'pending',
+      payment_id TEXT,
       expires_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -85,11 +80,11 @@ function auth(req, res, next) {
 
   const authHeader = req.headers.authorization;
 
-  if (!authHeader?.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith("Bearer "))
     return res.status(401).json({ error: "Token ausente" });
-  }
 
   try {
+
     const decoded = jwt.verify(
       authHeader.replace("Bearer ", ""),
       process.env.JWT_SECRET
@@ -97,7 +92,6 @@ function auth(req, res, next) {
 
     db.get(`SELECT * FROM users WHERE id=?`, [decoded.id], (err, user) => {
 
-      if (err) return res.status(500).json({ error: "Erro interno" });
       if (!user) return res.status(401).json({ error: "Usuário inválido" });
 
       req.user = user;
@@ -107,15 +101,6 @@ function auth(req, res, next) {
   } catch {
     return res.status(401).json({ error: "Token inválido" });
   }
-}
-
-function adminOnly(req, res, next) {
-
-  if (!req.user || req.user.email.toLowerCase() !== ADMIN_EMAIL) {
-    return res.status(403).json({ error: "Acesso restrito" });
-  }
-
-  next();
 }
 
 // =======================================================================
@@ -160,15 +145,12 @@ app.post("/auth/login", (req, res) => {
 
   let { email, password } = req.body;
 
-  if (!email || !password)
-    return res.status(400).json({ error: "Dados inválidos" });
-
   email = email.toLowerCase().trim();
 
   db.get(`SELECT * FROM users WHERE email=?`, [email], (err, user) => {
 
-    if (err) return res.status(500).json({ error: "Erro interno" });
-    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
+    if (!user)
+      return res.status(404).json({ error: "Usuário não encontrado" });
 
     if (!bcrypt.compareSync(password, user.password))
       return res.status(401).json({ error: "Senha incorreta" });
@@ -179,17 +161,15 @@ app.post("/auth/login", (req, res) => {
       { expiresIn: "7d" }
     );
 
-    const isAdmin = user.email.toLowerCase() === ADMIN_EMAIL;
-
-    res.json({ token, isAdmin });
+    res.json({ token });
   });
 });
 
 // =======================================================================
-// CRIAR PAGAMENTO
+// CRIAR ASSINATURA PIX
 // =======================================================================
 
-app.post("/create-payment", auth, async (req, res) => {
+app.post("/subscription/create", auth, async (req, res) => {
 
   try {
 
@@ -197,24 +177,95 @@ app.post("/create-payment", auth, async (req, res) => {
       transaction_amount: PLAN_PRICE,
       description: "Assinatura Aldra - 30 dias",
       payment_method_id: "pix",
-      payer: {
-        email: req.user.email
-      }
+      payer: { email: req.user.email }
     };
 
     const result = await payment.create({ body });
 
-    res.json(result);
+    const qr = result.point_of_interaction.transaction_data.qr_code_base64;
+    const pixCode = result.point_of_interaction.transaction_data.qr_code;
 
-  } catch (error) {
-    console.error(error);
+    db.run(`
+      UPDATE subscriptions
+      SET payment_id=?, status='pending'
+      WHERE user_id=?`,
+      [result.id, req.user.id]
+    );
+
+    res.json({
+      status: "pending",
+      qr: `data:image/png;base64,${qr}`,
+      pixCode
+    });
+
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Erro ao criar pagamento" });
   }
 
 });
 
 // =======================================================================
-// WEBHOOK MERCADO PAGO
+// STATUS ASSINATURA
+// =======================================================================
+
+app.get("/subscription/status", auth, async (req, res) => {
+
+  db.get(`
+    SELECT * FROM subscriptions
+    WHERE user_id=?`,
+    [req.user.id],
+    async (err, sub) => {
+
+      if (!sub)
+        return res.json({ status: "none" });
+
+      if (sub.status === "active")
+        return res.json({ status: "approved" });
+
+      if (!sub.payment_id)
+        return res.json({ status: "inactive" });
+
+      try {
+
+        const mpPayment = await payment.get({ id: sub.payment_id });
+
+        if (mpPayment.status === "approved") {
+
+          const expires = new Date();
+          expires.setDate(expires.getDate() + 30);
+
+          db.run(`
+            UPDATE subscriptions
+            SET status='active',
+                expires_at=?
+            WHERE user_id=?`,
+            [expires.toISOString(), req.user.id]
+          );
+
+          return res.json({ status: "approved" });
+        }
+
+        const qr = mpPayment.point_of_interaction?.transaction_data?.qr_code_base64;
+        const pixCode = mpPayment.point_of_interaction?.transaction_data?.qr_code;
+
+        return res.json({
+          status: mpPayment.status,
+          qr: qr ? `data:image/png;base64,${qr}` : null,
+          pixCode: pixCode || null
+        });
+
+      } catch (e) {
+        return res.json({ status: "inactive" });
+      }
+
+    }
+  );
+
+});
+
+// =======================================================================
+// WEBHOOK
 // =======================================================================
 
 app.post("/webhook", async (req, res) => {
@@ -225,11 +276,11 @@ app.post("/webhook", async (req, res) => {
 
     if (type === "payment") {
 
-      const paymentInfo = await payment.get({ id: data.id });
+      const mpPayment = await payment.get({ id: data.id });
 
-      if (paymentInfo.status === "approved") {
+      if (mpPayment.status === "approved") {
 
-        const email = paymentInfo.payer.email.toLowerCase();
+        const email = mpPayment.payer.email.toLowerCase();
 
         db.get(`SELECT * FROM users WHERE email=?`, [email], (err, user) => {
 
@@ -254,76 +305,10 @@ app.post("/webhook", async (req, res) => {
 
     res.sendStatus(200);
 
-  } catch (error) {
-    console.error(error);
+  } catch (err) {
+    console.error(err);
     res.sendStatus(500);
   }
-
-});
-
-// =======================================================================
-// STATUS DA ASSINATURA
-// =======================================================================
-
-app.get("/subscription/status", auth, (req, res) => {
-
-  db.get(`
-    SELECT * FROM subscriptions
-    WHERE user_id=?`,
-    [req.user.id],
-    (err, sub) => {
-
-      if (!sub)
-        return res.json({ status: "none" });
-
-      if (sub.status !== "active")
-        return res.json({ status: "inactive" });
-
-      const now = new Date();
-      const expires = new Date(sub.expires_at);
-
-      if (expires < now) {
-
-        db.run(`
-          UPDATE subscriptions
-          SET status='expired'
-          WHERE user_id=?`,
-          [req.user.id]
-        );
-
-        return res.json({ status: "expired" });
-      }
-
-      res.json({
-        status: "active",
-        expires_at: sub.expires_at
-      });
-
-    }
-  );
-
-});
-
-// =======================================================================
-// ADMIN
-// =======================================================================
-
-app.get("/admin/stats", auth, adminOnly, (req, res) => {
-
-  db.get(`SELECT COUNT(*) as total FROM users`, [], (_, users) => {
-    db.get(`SELECT COUNT(*) as total FROM subscriptions WHERE status='active'`, [], (_, active) => {
-      db.get(`SELECT COUNT(*) as total FROM subscriptions WHERE status='pending'`, [], (_, pending) => {
-
-        res.json({
-          users: users.total,
-          active: active.total,
-          pending: pending.total,
-          receita_mensal: active.total * PLAN_PRICE
-        });
-
-      });
-    });
-  });
 
 });
 
