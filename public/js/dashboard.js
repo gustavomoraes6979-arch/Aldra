@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — Aldra SaaS Profissional (PIX FIX FINAL)
+// dashboard.js — Aldra SaaS (FIX RENDER FINAL)
 // ==========================================
 
 (function () {
@@ -15,7 +15,7 @@
   const alertBox = document.getElementById("alert");
   const crmLista = document.getElementById("crmLista");
 
-  // ✅ IDs REAIS do seu HTML
+  // IDs do HTML
   const pixBox = document.getElementById("pixBox");
   const pixQr = document.getElementById("qrImage");
   const pixCopiaCola = document.getElementById("pixCode");
@@ -32,6 +32,18 @@
   }
 
   // ==========================================
+  // SAFE JSON (evita crash no Render)
+  // ==========================================
+  async function safeJson(res) {
+    try {
+      return await res.json();
+    } catch {
+      console.error("⚠️ Resposta não é JSON válido");
+      return {};
+    }
+  }
+
+  // ==========================================
   // VERIFICA USUÁRIO
   // ==========================================
   async function loadUser() {
@@ -45,8 +57,8 @@
         return;
       }
 
-      const data = await res.json();
-      isAdmin = data.isAdmin;
+      const data = await safeJson(res);
+      isAdmin = !!data.isAdmin;
 
     } catch (err) {
       console.error("Erro loadUser:", err);
@@ -75,43 +87,47 @@
         return;
       }
 
-      const data = await res.json();
+      const data = await safeJson(res);
 
-      console.log("📊 subscription status:", data.status);
+      console.log("📊 subscription status:", data);
 
+      // ✅ STATUS ATIVO
       if (data.status === "active" || data.status === "approved") {
         subscriptionActive = true;
         if (alertBox) alertBox.style.display = "none";
-      } else {
-        subscriptionActive = false;
-        if (alertBox) alertBox.style.display = "block";
+        return;
+      }
 
-        // 🔥 Se backend já mandar QR pendente
-        const pixData = data.point_of_interaction?.transaction_data;
+      // 🔴 NÃO ATIVO
+      subscriptionActive = false;
+      if (alertBox) alertBox.style.display = "block";
 
-        if (pixData?.qr_code_base64 && pixQr) {
-          pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
-          if (pixBox) pixBox.style.display = "block";
-        }
+      // 🔥 TENTA MOSTRAR PIX SE EXISTIR
+      const pixData =
+        data?.point_of_interaction?.transaction_data ||
+        data?.transaction_data ||
+        null;
 
-        if (pixData?.qr_code && pixCopiaCola) {
-          pixCopiaCola.value = pixData.qr_code;
-        }
+      if (pixData?.qr_code_base64 && pixQr) {
+        pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
+        if (pixBox) pixBox.style.display = "block";
+      }
+
+      if (pixData?.qr_code && pixCopiaCola) {
+        pixCopiaCola.value = pixData.qr_code;
       }
 
     } catch (err) {
       console.error("Erro checkSubscription:", err);
-      forceLogout();
     }
   }
 
   // ==========================================
-  // 🔥 PAGAMENTO PIX
+  // PAGAMENTO PIX (ALINHADO COM HTML)
   // ==========================================
   window.ativarPlano = async function () {
-
     try {
-      const res = await fetch("/create-payment", {
+      const res = await fetch("/subscription/create", {
         method: "POST",
         headers: {
           Authorization: "Bearer " + token
@@ -123,29 +139,30 @@
         return;
       }
 
-      const data = await res.json();
+      const data = await safeJson(res);
 
       console.log("💰 pagamento:", data);
 
       const pixData =
-        data.point_of_interaction?.transaction_data;
+        data?.point_of_interaction?.transaction_data ||
+        data?.transaction_data ||
+        null;
 
       if (!pixData) {
         alert("PIX não retornado pela API.");
         return;
       }
 
-      // ✅ QR
+      // QR
       if (pixData.qr_code_base64 && pixQr) {
         pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
       }
 
-      // ✅ copia e cola
+      // copia e cola
       if (pixData.qr_code && pixCopiaCola) {
         pixCopiaCola.value = pixData.qr_code;
       }
 
-      // ✅ mostrar box
       if (pixBox) pixBox.style.display = "block";
       if (alertBox) alertBox.style.display = "block";
 
@@ -177,7 +194,6 @@
   }
 
   function showSection(name) {
-
     if (!subscriptionActive && !isAdmin) {
       alert("Sua assinatura está inativa.");
       return;
@@ -197,7 +213,6 @@
   // CRM
   // ==========================================
   async function loadClients() {
-
     try {
       const res = await fetch("/api/crm", {
         headers: { Authorization: "Bearer " + token }
@@ -213,7 +228,7 @@
         return;
       }
 
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (!crmLista) return;
 
@@ -235,7 +250,6 @@
   }
 
   window.salvarCliente = async function () {
-
     if (!subscriptionActive && !isAdmin) {
       alert("Assinatura necessária.");
       return;
