@@ -92,13 +92,21 @@ function auth(req, res, next) {
 
     db.get(`SELECT * FROM users WHERE id=?`, [decoded.id], (err, user) => {
 
-      if (!user) return res.status(401).json({ error: "Usuário inválido" });
+      if (err) {
+        console.error("Erro DB auth:", err);
+        return res.status(500).json({ error: "Erro interno" });
+      }
+
+      if (!user)
+        return res.status(401).json({ error: "Usuário inválido" });
 
       req.user = user;
+      req.user.is_admin = user.email === ADMIN_EMAIL;
+
       next();
     });
 
-  } catch {
+  } catch (e) {
     return res.status(401).json({ error: "Token inválido" });
   }
 }
@@ -109,7 +117,7 @@ function auth(req, res, next) {
 
 function adminOnly(req, res, next) {
 
-  if (req.user.email !== ADMIN_EMAIL)
+  if (!req.user?.is_admin)
     return res.status(403).json({ error: "Acesso restrito" });
 
   next();
@@ -157,9 +165,17 @@ app.post("/auth/login", (req, res) => {
 
   let { email, password } = req.body;
 
+  if (!email || !password)
+    return res.status(400).json({ error: "Dados inválidos" });
+
   email = email.toLowerCase().trim();
 
   db.get(`SELECT * FROM users WHERE email=?`, [email], (err, user) => {
+
+    if (err) {
+      console.error("Erro login:", err);
+      return res.status(500).json({ error: "Erro interno" });
+    }
 
     if (!user)
       return res.status(404).json({ error: "Usuário não encontrado" });
@@ -167,13 +183,18 @@ app.post("/auth/login", (req, res) => {
     if (!bcrypt.compareSync(password, user.password))
       return res.status(401).json({ error: "Senha incorreta" });
 
+    const isAdmin = user.email === ADMIN_EMAIL;
+
     const token = jwt.sign(
-      { id: user.id },
+      {
+        id: user.id,
+        is_admin: isAdmin
+      },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    res.json({ token });
+    res.json({ token, is_admin: isAdmin });
   });
 });
 
@@ -226,8 +247,10 @@ app.get("/admin/users", auth, adminOnly, (req, res) => {
     LEFT JOIN subscriptions s ON u.id = s.user_id
   `, (err, rows) => {
 
-    if (err)
+    if (err) {
+      console.error("Erro admin users:", err);
       return res.status(500).json({ error: "Erro ao buscar usuários" });
+    }
 
     res.json(rows);
   });
@@ -246,8 +269,10 @@ app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
     [req.params.id],
     function (err) {
 
-      if (err)
+      if (err) {
+        console.error("Erro cancelar:", err);
         return res.status(500).json({ error: "Erro ao cancelar" });
+      }
 
       res.json({ success: true });
     }

@@ -1,10 +1,14 @@
 // =====================================================
-// Admin.js — Aldra (VERSÃO COMPATÍVEL COM SERVER)
+// Admin.js — Aldra (VERSÃO 100% COMPATÍVEL)
 // =====================================================
 
 document.addEventListener("DOMContentLoaded", () => {
   carregarPainel();
 });
+
+// =====================================================
+// BOOT
+// =====================================================
 
 async function carregarPainel() {
   const token = localStorage.getItem("token");
@@ -15,18 +19,20 @@ async function carregarPainel() {
   }
 
   try {
-    await carregarStats(token);
-    await carregarUsuarios(token);
+    await Promise.all([
+      carregarStats(token),
+      carregarUsuarios(token)
+    ]);
   } catch (err) {
     console.error("Erro admin:", err);
     alert("Erro ao carregar painel administrativo");
-    logoutForcado();
   }
 }
 
 // =====================================================
 // STATS
 // =====================================================
+
 async function carregarStats(token) {
   const res = await fetch("/admin/stats", {
     headers: { Authorization: `Bearer ${token}` }
@@ -43,22 +49,24 @@ async function carregarStats(token) {
 
   const data = await res.json();
 
+  // 🔥 CORRIGIDO — nomes compatíveis com server.js
   document.getElementById("totalUsers").innerText =
-    data.totalUsers || 0;
+    data.users ?? 0;
 
   document.getElementById("activeUsers").innerText =
-    data.activeSubscriptions || 0;
+    data.active ?? 0;
 
   document.getElementById("pendingUsers").innerText =
-    (data.totalUsers || 0) - (data.activeSubscriptions || 0);
+    data.pending ?? 0;
 
   document.getElementById("monthlyRevenue").innerText =
-    "R$ " + (data.monthlyRevenue || 0).toLocaleString("pt-BR");
+    "R$ " + Number(data.receita_mensal ?? 0).toLocaleString("pt-BR");
 }
 
 // =====================================================
 // USERS TABLE
 // =====================================================
+
 async function carregarUsuarios(token) {
   const res = await fetch("/admin/users", {
     headers: { Authorization: `Bearer ${token}` }
@@ -91,9 +99,9 @@ function renderUsuarios(users) {
       <td>${user.id}</td>
       <td>${user.name || "-"}</td>
       <td>${user.email}</td>
-      <td>${user.role || "user"}</td>
+      <td>user</td>
       <td class="${statusClass}">
-        ${user.status || "inactive"}
+        ${user.status || "pending"}
       </td>
       <td class="actions">
         <button class="btn-primary"
@@ -111,6 +119,7 @@ function renderUsuarios(users) {
 // =====================================================
 // ACTIONS
 // =====================================================
+
 async function cancelar(id) {
   if (!confirm("Cancelar assinatura deste usuário?")) return;
   await adminAction(`/admin/cancel/${id}`);
@@ -142,8 +151,9 @@ async function adminAction(url) {
 // =====================================================
 // LOGOUT FORÇADO
 // =====================================================
+
 function logoutForcado() {
   localStorage.removeItem("token");
   alert("Acesso restrito ao administrador.");
-  window.location.href = "/dashboard.html";
+  window.location.href = "/";
 }

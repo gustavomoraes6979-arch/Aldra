@@ -177,58 +177,23 @@ th{
 </div>
 
 <script>
+// 🔒 BLOQUEIO SIMPLES (fonte de verdade = backend)
 const token = localStorage.getItem("token");
-const isAdmin = localStorage.getItem("isAdmin");
 
-// 🔒 BLOQUEIO INICIAL
-if(!token || !isAdmin){
-  alert("Acesso não autorizado.");
-  window.location.href="/dashboard.html";
+if (!token) {
+  alert("Faça login primeiro.");
+  window.location.href = "/";
 }
-
-// ===============================
-// VALIDAÇÃO REAL VIA BACKEND
-// ===============================
-async function validarAdmin(){
-
-  try{
-
-    const res = await fetch("/api/me",{
-      headers:{ Authorization:"Bearer "+token }
-    });
-
-    if(res.status === 401){
-      logout();
-      return;
-    }
-
-    const data = await res.json();
-
-    if(!data.isAdmin){
-      alert("Acesso restrito ao administrador.");
-      localStorage.removeItem("isAdmin");
-      window.location.href="/dashboard.html";
-      return;
-    }
-
-  }catch{
-    logout();
-  }
-}
-
-validarAdmin();
 
 // ===============================
 // LOGOUT TOTAL
 // ===============================
 function logout(){
   localStorage.removeItem("token");
-  localStorage.removeItem("isAdmin");
   window.location.href="/";
 }
 
 function voltarDashboard(){
-  localStorage.removeItem("isAdmin");
   window.location.href="/dashboard.html";
 }
 </script>
