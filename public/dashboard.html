@@ -171,9 +171,9 @@ Assinar Plano Mensal — R$ 70,00
 
 <div class="pix-box" id="pixBox">
 <h3>📲 Escaneie o QR Code</h3>
-<img id="qrImage" />
+<img id="pixQr" />
 <p><strong>Copia e Cola:</strong></p>
-<textarea id="pixCode" readonly></textarea>
+<textarea id="pixCopiaCola" readonly></textarea>
 </div>
 </div>
 
@@ -214,122 +214,8 @@ Assinar Plano Mensal — R$ 70,00
 </table>
 </div>
 
-<script>
-
-// ===============================
-// PROTEÇÃO LOGIN
-// ===============================
-const token = localStorage.getItem("token");
-
-if(!token){
-  window.location.href="/";
-}
-
-// ===============================
-// LOGOUT
-// ===============================
-function logout(){
-  localStorage.removeItem("token");
-  window.location.href="/";
-}
-
-// ===============================
-// MOSTRAR SEÇÕES
-// ===============================
-function showSection(name){
-  document.querySelectorAll(".section").forEach(sec=>{
-    sec.classList.remove("active");
-  });
-  document.getElementById("section"+name).classList.add("active");
-}
-
-// ===============================
-// MOSTRAR PIX
-// ===============================
-function mostrarPix(qr, pixCode){
-  const alertBox = document.getElementById("alert");
-  const pixBox = document.getElementById("pixBox");
-
-  alertBox.style.display = "block";
-  pixBox.style.display = "block";
-
-  if(qr){
-    document.getElementById("qrImage").src = qr;
-  }
-
-  if(pixCode){
-    document.getElementById("pixCode").value = pixCode;
-  }
-}
-
-// ===============================
-// VERIFICAR ASSINATURA
-// ===============================
-async function verificarAssinatura(){
-  try{
-    const res = await fetch("/subscription/status",{
-      method:"GET",
-      headers:{
-        Authorization:"Bearer "+token,
-        "Content-Type":"application/json"
-      }
-    });
-
-    if(!res.ok){
-      console.log("Status não OK:", res.status);
-      return;
-    }
-
-    const data = await res.json();
-    console.log("STATUS:", data);
-
-    const status = data.status;
-
-    if(status === "approved"){
-      document.getElementById("alert").style.display="none";
-      return;
-    }
-
-    if(data.qr || data.pixCode){
-      mostrarPix(data.qr, data.pixCode);
-      return;
-    }
-
-    document.getElementById("alert").style.display="block";
-
-  }catch(e){
-    console.error("Erro ao verificar assinatura:", e);
-  }
-}
-
-verificarAssinatura();
-
-// ===============================
-// ATIVAR PLANO
-// ===============================
-async function ativarPlano(){
-  try{
-    const res = await fetch("/subscription/create",{
-      method:"POST",
-      headers:{
-        Authorization:"Bearer "+token,
-        "Content-Type":"application/json"
-      }
-    });
-
-    const data = await res.json();
-    console.log("CRIAR:", data);
-
-    if(data.qr || data.pixCode){
-      mostrarPix(data.qr, data.pixCode);
-    }
-
-  }catch(e){
-    console.error("Erro ao criar assinatura:", e);
-  }
-}
-
-</script>
+<!-- ✅ APENAS O DASHBOARD.JS CONTROLA TUDO -->
+<script src="/dashboard.js"></script>
 
 </body>
 </html>
