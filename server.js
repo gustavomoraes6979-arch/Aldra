@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (FIX STATIC + RENDER + ADMIN OK)
+// Aldra — server.js (PIX + SUBSCRIPTION + STATIC FIX FINAL)
 // =======================================================================
 
 import express from "express";
@@ -24,10 +24,10 @@ const PLAN_PRICE = 70;
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
 if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
 
-const client = new MercadoPagoConfig({
+const mpClient = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN.trim(),
 });
-const payment = new Payment(client);
+const mpPayment = new Payment(mpClient);
 
 // =======================================================================
 
@@ -85,35 +85,109 @@ function auth(req, res, next) {
       process.env.JWT_SECRET
     );
 
-    db.get(
-      `SELECT * FROM users WHERE id=?`,
-      [decoded.id],
-      (err, user) => {
-        if (err) return res.status(500).json({ error: "Erro interno" });
-        if (!user) return res.status(401).json({ error: "Usuário inválido" });
+    db.get(`SELECT * FROM users WHERE id=?`, [decoded.id], (err, user) => {
+      if (!user) return res.status(401).json({ error: "Usuário inválido" });
 
-        req.user = user;
-        req.user.is_admin = user.email === ADMIN_EMAIL;
-        next();
-      }
-    );
+      req.user = user;
+      req.user.is_admin = user.email === ADMIN_EMAIL;
+      next();
+    });
   } catch {
     return res.status(401).json({ error: "Token inválido" });
   }
 }
 
 // =======================================================================
-// ADMIN MIDDLEWARE
+// 🔥 CRIAR PIX
 // =======================================================================
 
-function adminOnly(req, res, next) {
-  if (!req.user?.is_admin)
-    return res.status(403).json({ error: "Acesso restrito" });
-  next();
-}
+app.post("/subscription/create", auth, async (req, res) => {
+  try {
+    const paymentData = await mpPayment.create({
+      body: {
+        transaction_amount: PLAN_PRICE,
+        description: "Assinatura Aldra",
+        payment_method_id: "pix",
+        payer: {
+          email: req.user.email,
+        },
+      },
+    });
+
+    const tx =
+      paymentData.point_of_interaction?.transaction_data || null;
+
+    if (!tx) {
+      return res.status(500).json({ error: "PIX não retornado" });
+    }
+
+    // salva pagamento
+    db.run(
+      `UPDATE subscriptions
+       SET payment_id=?, status='pending'
+       WHERE user_id=?`,
+      [paymentData.id, req.user.id]
+    );
+
+    res.json(paymentData);
+  } catch (err) {
+    console.error("Erro ao criar PIX:", err);
+    res.status(500).json({ error: "Erro ao gerar pagamento" });
+  }
+});
 
 // =======================================================================
-// REGISTER
+// 🔥 STATUS DA ASSINATURA
+// =======================================================================
+
+app.get("/subscription/status", auth, (req, res) => {
+  db.get(
+    `SELECT status, expires_at FROM subscriptions WHERE user_id=?`,
+    [req.user.id],
+    (err, row) => {
+      if (!row) return res.json({ status: "pending" });
+
+      res.json({
+        status: row.status,
+        expires_at: row.expires_at,
+      });
+    }
+  );
+});
+
+// =======================================================================
+// 🔥 WEBHOOK MERCADO PAGO
+// =======================================================================
+
+app.post("/webhook/mercadopago", async (req, res) => {
+  try {
+    const paymentId = req.body?.data?.id;
+    if (!paymentId) return res.sendStatus(200);
+
+    const paymentInfo = await mpPayment.get({ id: paymentId });
+
+    if (paymentInfo.status !== "approved") {
+      return res.sendStatus(200);
+    }
+
+    // ativa assinatura
+    db.run(
+      `UPDATE subscriptions
+       SET status='active',
+           expires_at=datetime('now','+30 days')
+       WHERE payment_id=?`,
+      [paymentId]
+    );
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Webhook erro:", err);
+    res.sendStatus(200);
+  }
+});
+
+// =======================================================================
+// AUTH BÁSICO (login/register mantidos iguais)
 // =======================================================================
 
 app.post("/auth/register", (req, res) => {
@@ -129,8 +203,7 @@ app.post("/auth/register", (req, res) => {
     `INSERT INTO users (name,email,password) VALUES (?,?,?)`,
     [name, email, hash],
     function (err) {
-      if (err)
-        return res.status(400).json({ error: "Email já existe" });
+      if (err) return res.status(400).json({ error: "Email já existe" });
 
       db.run(
         `INSERT INTO subscriptions (user_id,status) VALUES (?, 'pending')`,
@@ -142,10 +215,6 @@ app.post("/auth/register", (req, res) => {
   );
 });
 
-// =======================================================================
-// LOGIN
-// =======================================================================
-
 app.post("/auth/login", (req, res) => {
   let { email, password } = req.body;
 
@@ -154,98 +223,32 @@ app.post("/auth/login", (req, res) => {
 
   email = email.toLowerCase().trim();
 
-  db.get(
-    `SELECT * FROM users WHERE email=?`,
-    [email],
-    (err, user) => {
-      if (err) return res.status(500).json({ error: "Erro interno" });
-      if (!user)
-        return res.status(404).json({ error: "Usuário não encontrado" });
+  db.get(`SELECT * FROM users WHERE email=?`, [email], (err, user) => {
+    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
 
-      if (!bcrypt.compareSync(password, user.password))
-        return res.status(401).json({ error: "Senha incorreta" });
+    if (!bcrypt.compareSync(password, user.password))
+      return res.status(401).json({ error: "Senha incorreta" });
 
-      const isAdmin = user.email === ADMIN_EMAIL;
+    const isAdmin = user.email === ADMIN_EMAIL;
 
-      const token = jwt.sign(
-        { id: user.id, is_admin: isAdmin },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      res.json({ token, is_admin: isAdmin });
-    }
-  );
-});
-
-// =======================================================================
-// ADMIN ROTAS
-// =======================================================================
-
-app.get("/admin/stats", auth, adminOnly, (req, res) => {
-  db.get(`SELECT COUNT(*) as total FROM users`, (err, totalUsers) => {
-    db.get(
-      `SELECT COUNT(*) as active FROM subscriptions WHERE status='active'`,
-      (err2, activeUsers) => {
-        db.get(
-          `SELECT COUNT(*) as pending FROM subscriptions WHERE status='pending'`,
-          (err3, pendingUsers) => {
-            const receita = (activeUsers?.active || 0) * PLAN_PRICE;
-
-            res.json({
-              users: totalUsers?.total || 0,
-              active: activeUsers?.active || 0,
-              pending: pendingUsers?.pending || 0,
-              receita_mensal: receita,
-            });
-          }
-        );
-      }
+    const token = jwt.sign(
+      { id: user.id, is_admin: isAdmin },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
     );
+
+    res.json({ token, is_admin: isAdmin });
   });
 });
 
-app.get("/admin/users", auth, adminOnly, (req, res) => {
-  db.all(
-    `SELECT u.id, u.name, u.email, s.status
-     FROM users u
-     LEFT JOIN subscriptions s ON u.id = s.user_id`,
-    (err, rows) => {
-      if (err)
-        return res.status(500).json({ error: "Erro ao buscar usuários" });
-
-      res.json(rows);
-    }
-  );
-});
-
-app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
-  db.run(
-    `UPDATE subscriptions
-     SET status='pending', payment_id=NULL, expires_at=NULL
-     WHERE user_id=?`,
-    [req.params.id],
-    function (err) {
-      if (err)
-        return res.status(500).json({ error: "Erro ao cancelar" });
-
-      res.json({ success: true });
-    }
-  );
-});
-
 // =======================================================================
-// 🔥 STATIC (ORDEM CORRETA)
+// STATIC
 // =======================================================================
 
-// SERVE arquivos estáticos primeiro
 app.use(express.static(PUBLIC_DIR));
 
-// 🔥 fallback SOMENTE para rotas que não são arquivos
 app.get("*", (req, res) => {
-  if (req.path.includes(".")) {
-    return res.status(404).end();
-  }
+  if (req.path.includes(".")) return res.status(404).end();
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 

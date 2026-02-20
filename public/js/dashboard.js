@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — Aldra SaaS (PIX REATIVADO)
+// dashboard.js — Aldra SaaS (PIX DEFINITIVO)
 // ==========================================
 
 (function () {
@@ -44,43 +44,26 @@
   }
 
   // ==========================================
-  // DECODIFICA TOKEN (fallback)
+  // DECODIFICA TOKEN
   // ==========================================
   function decodeToken() {
     try {
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      return payload;
+      return JSON.parse(atob(token.split(".")[1]));
     } catch {
       return {};
     }
   }
 
   // ==========================================
-  // VERIFICA USUÁRIO (COM FALLBACK)
+  // LOAD USER
   // ==========================================
   async function loadUser() {
     try {
-      // tenta endpoint (se existir)
-      const res = await fetch("/api/me", {
-        headers: { Authorization: "Bearer " + token }
-      });
-
-      if (res.ok) {
-        const data = await safeJson(res);
-        isAdmin = !!data.isAdmin;
-        console.log("👑 Admin via API:", isAdmin);
-        return;
-      }
-
-      // 🔥 fallback pelo token
       const decoded = decodeToken();
       isAdmin = !!decoded.is_admin;
-      console.log("👑 Admin via token:", isAdmin);
-
+      console.log("👑 Admin:", isAdmin);
     } catch (err) {
-      console.warn("⚠️ loadUser fallback ativado");
-      const decoded = decodeToken();
-      isAdmin = !!decoded.is_admin;
+      console.warn("⚠️ Falha ao decodificar token");
     }
   }
 
@@ -88,8 +71,6 @@
   // VERIFICA ASSINATURA
   // ==========================================
   async function checkSubscription() {
-
-    // 👑 ADMIN LIBERADO
     if (isAdmin) {
       subscriptionActive = true;
       if (alertBox) alertBox.style.display = "none";
@@ -101,7 +82,6 @@
         headers: { Authorization: "Bearer " + token }
       });
 
-      // se endpoint não existir, não trava
       if (!res.ok) {
         console.warn("⚠️ subscription/status não disponível");
         subscriptionActive = false;
@@ -112,14 +92,12 @@
       const data = await safeJson(res);
       console.log("📊 subscription status:", data);
 
-      // ✅ STATUS ATIVO
       if (data.status === "active" || data.status === "approved") {
         subscriptionActive = true;
         if (alertBox) alertBox.style.display = "none";
         return;
       }
 
-      // 🔴 NÃO ATIVO
       subscriptionActive = false;
       if (alertBox) alertBox.style.display = "block";
 
@@ -131,40 +109,59 @@
   }
 
   // ==========================================
-  // RENDER PIX (ROBUSTO)
+  // 🔥 RENDER PIX SUPER ROBUSTO
   // ==========================================
   function renderPix(data) {
+    console.log("🔍 renderPix recebeu:", data);
+
+    // tenta todos formatos possíveis do Mercado Pago
     const pixData =
       data?.point_of_interaction?.transaction_data ||
       data?.transaction_data ||
       data?.pix ||
-      null;
+      data;
 
     if (!pixData) {
       console.warn("⚠️ Nenhum PIX encontrado");
       return;
     }
 
-    // QR
-    if (pixData.qr_code_base64 && pixQr) {
-      pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
+    const base64 =
+      pixData.qr_code_base64 ||
+      pixData.qrCodeBase64 ||
+      pixData.qr_code_base_64;
+
+    const copia =
+      pixData.qr_code ||
+      pixData.qrCode ||
+      pixData.copia_cola;
+
+    // QR IMAGE
+    if (base64 && pixQr) {
+      pixQr.src = "data:image/png;base64," + base64;
+      console.log("✅ QR carregado");
+    } else {
+      console.warn("⚠️ qr_code_base64 não encontrado");
     }
 
-    // copia e cola
-    if (pixData.qr_code && pixCopiaCola) {
-      pixCopiaCola.value = pixData.qr_code;
+    // COPIA E COLA
+    if (copia && pixCopiaCola) {
+      pixCopiaCola.value = copia;
+      console.log("✅ Copia e cola preenchido");
     }
 
-    if (pixBox) pixBox.style.display = "block";
-
-    console.log("✅ PIX renderizado");
+    if (pixBox) {
+      pixBox.style.display = "block";
+    }
   }
 
   // ==========================================
-  // PAGAMENTO PIX
+  // CRIAR PAGAMENTO PIX
   // ==========================================
   window.ativarPlano = async function () {
     try {
+      console.log("💰 Criando pagamento PIX...");
+
       const res = await fetch("/subscription/create", {
         method: "POST",
         headers: {
@@ -172,13 +169,13 @@
         }
       });
 
+      const data = await safeJson(res);
+      console.log("💰 resposta create:", data);
+
       if (!res.ok) {
-        alert("Erro ao gerar pagamento.");
+        alert(data.error || "Erro ao gerar pagamento.");
         return;
       }
-
-      const data = await safeJson(res);
-      console.log("💰 pagamento:", data);
 
       renderPix(data);
 
@@ -234,15 +231,7 @@
         headers: { Authorization: "Bearer " + token }
       });
 
-      if (res.status === 401) {
-        forceLogout();
-        return;
-      }
-
-      if (!res.ok) {
-        console.warn("⚠️ CRM indisponível");
-        return;
-      }
+      if (!res.ok) return;
 
       const data = await safeJson(res);
 
@@ -293,11 +282,6 @@
           phone: telefone
         })
       });
-
-      if (res.status === 401) {
-        forceLogout();
-        return;
-      }
 
       if (!res.ok) {
         alert("Erro ao salvar cliente.");
