@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (FULL FIX: PIX + ADMIN + CRM)
+// Aldra — server.js (VERSÃO COMPLETA + ADMIN FUNCIONANDO)
 // =======================================================================
 
 import express from "express";
@@ -24,16 +24,22 @@ const PLAN_PRICE = 70;
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
 if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
 
-const mpClient = new MercadoPagoConfig({
+const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN.trim(),
 });
-const payment = new Payment(mpClient);
+const payment = new Payment(client);
 
+// =======================================================================
+// PATHS
 // =======================================================================
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.join(__dirname, "public");
+
+// =======================================================================
+// APP
+// =======================================================================
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -67,153 +73,205 @@ db.serialize(() => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS crm (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      name TEXT,
-      email TEXT,
-      phone TEXT
-    )
-  `);
 });
 
 // =======================================================================
-// AUTH
+// AUTH MIDDLEWARE
 // =======================================================================
 
 function auth(req, res, next) {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader?.startsWith("Bearer "))
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Token ausente" });
+  }
 
   try {
-    const decoded = jwt.verify(
-      authHeader.replace("Bearer ", ""),
-      process.env.JWT_SECRET
+    const token = authHeader.replace("Bearer ", "");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    db.get(
+      `SELECT * FROM users WHERE id = ?`,
+      [decoded.id],
+      (err, user) => {
+        if (err) {
+          console.error("Erro DB auth:", err);
+          return res.status(500).json({ error: "Erro interno" });
+        }
+
+        if (!user) {
+          return res.status(401).json({ error: "Usuário inválido" });
+        }
+
+        req.user = user;
+        req.user.is_admin = user.email === ADMIN_EMAIL;
+        next();
+      }
     );
-
-    db.get(`SELECT * FROM users WHERE id=?`, [decoded.id], (err, user) => {
-      if (err) return res.status(500).json({ error: "Erro interno" });
-      if (!user) return res.status(401).json({ error: "Usuário inválido" });
-
-      req.user = user;
-      req.user.is_admin = user.email === ADMIN_EMAIL;
-      next();
-    });
-  } catch {
+  } catch (error) {
     return res.status(401).json({ error: "Token inválido" });
   }
 }
 
 // =======================================================================
-// 🔥 API ME (corrige admin)
+// ADMIN MIDDLEWARE
 // =======================================================================
 
-app.get("/api/me", auth, (req, res) => {
-  res.json({
-    id: req.user.id,
-    email: req.user.email,
-    isAdmin: req.user.is_admin,
-  });
-});
+function adminOnly(req, res, next) {
+  if (!req.user?.is_admin) {
+    return res.status(403).json({ error: "Acesso restrito" });
+  }
+  next();
+}
 
 // =======================================================================
-// 🔥 SUBSCRIPTION STATUS
+// REGISTER
 // =======================================================================
 
-app.get("/subscription/status", auth, (req, res) => {
-  db.get(
-    `SELECT * FROM subscriptions WHERE user_id=?`,
-    [req.user.id],
-    (err, sub) => {
-      if (err) return res.status(500).json({ error: "Erro interno" });
+app.post("/auth/register", (req, res) => {
+  let { name = "", email, password } = req.body;
 
-      res.json({
-        status: sub?.status || "pending",
-      });
+  if (!email || !password) {
+    return res.status(400).json({ error: "Dados inválidos" });
+  }
+
+  email = email.toLowerCase().trim();
+  const hash = bcrypt.hashSync(password, 10);
+
+  db.run(
+    `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`,
+    [name, email, hash],
+    function (err) {
+      if (err) {
+        console.error("Erro register:", err);
+        return res.status(400).json({ error: "Email já existe" });
+      }
+
+      db.run(
+        `INSERT INTO subscriptions (user_id, status) VALUES (?, 'pending')`,
+        [this.lastID],
+        (err2) => {
+          if (err2) {
+            console.error("Erro subscription:", err2);
+          }
+        }
+      );
+
+      res.json({ success: true });
     }
   );
 });
 
 // =======================================================================
-// 🔥 CRIAR PIX
+// LOGIN
 // =======================================================================
 
-app.post("/subscription/create", auth, async (req, res) => {
-  try {
-    const pix = await payment.create({
-      body: {
-        transaction_amount: PLAN_PRICE,
-        description: "Aldra SaaS",
-        payment_method_id: "pix",
-        payer: {
-          email: req.user.email,
-        },
-      },
-    });
+app.post("/auth/login", (req, res) => {
+  let { email, password } = req.body;
 
-    db.run(
-      `UPDATE subscriptions SET payment_id=?, status='pending' WHERE user_id=?`,
-      [pix.id, req.user.id]
-    );
-
-    res.json(pix);
-  } catch (err) {
-    console.error("Erro criar PIX:", err);
-    res.status(500).json({ error: "Erro ao gerar PIX" });
+  if (!email || !password) {
+    return res.status(400).json({ error: "Dados inválidos" });
   }
-});
 
-// =======================================================================
-// 🔥 WEBHOOK MERCADO PAGO
-// =======================================================================
+  email = email.toLowerCase().trim();
 
-app.post("/webhook/mp", async (req, res) => {
-  try {
-    const paymentId = req.body?.data?.id;
-    if (!paymentId) return res.sendStatus(200);
+  db.get(
+    `SELECT * FROM users WHERE email = ?`,
+    [email],
+    (err, user) => {
+      if (err) {
+        console.error("Erro login:", err);
+        return res.status(500).json({ error: "Erro interno" });
+      }
 
-    const info = await payment.get({ id: paymentId });
+      if (!user) {
+        return res.status(404).json({ error: "Usuário não encontrado" });
+      }
 
-    if (info.status === "approved") {
-      db.run(
-        `UPDATE subscriptions SET status='active' WHERE payment_id=?`,
-        [paymentId]
+      if (!bcrypt.compareSync(password, user.password)) {
+        return res.status(401).json({ error: "Senha incorreta" });
+      }
+
+      const isAdmin = user.email === ADMIN_EMAIL;
+
+      const token = jwt.sign(
+        { id: user.id, is_admin: isAdmin },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
       );
-    }
 
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("Webhook erro:", err);
-    res.sendStatus(200);
-  }
+      res.json({ token, is_admin: isAdmin });
+    }
+  );
 });
 
 // =======================================================================
-// 🔥 CRM
+// ========================== ADMIN ROTAS ================================
 // =======================================================================
 
-app.get("/api/crm", auth, (req, res) => {
+// STATS
+app.get("/admin/stats", auth, adminOnly, (req, res) => {
+  db.get(`SELECT COUNT(*) as total FROM users`, (err, totalUsers) => {
+    if (err) return res.status(500).json({ error: "Erro stats users" });
+
+    db.get(
+      `SELECT COUNT(*) as active FROM subscriptions WHERE status='active'`,
+      (err2, activeUsers) => {
+        if (err2) return res.status(500).json({ error: "Erro stats active" });
+
+        db.get(
+          `SELECT COUNT(*) as pending FROM subscriptions WHERE status='pending'`,
+          (err3, pendingUsers) => {
+            if (err3)
+              return res.status(500).json({ error: "Erro stats pending" });
+
+            const receita = (activeUsers?.active || 0) * PLAN_PRICE;
+
+            res.json({
+              users: totalUsers?.total || 0,
+              active: activeUsers?.active || 0,
+              pending: pendingUsers?.pending || 0,
+              receita_mensal: receita,
+            });
+          }
+        );
+      }
+    );
+  });
+});
+
+// LISTAR USUÁRIOS
+app.get("/admin/users", auth, adminOnly, (req, res) => {
   db.all(
-    `SELECT * FROM crm WHERE user_id=?`,
-    [req.user.id],
+    `SELECT u.id, u.name, u.email, s.status
+     FROM users u
+     LEFT JOIN subscriptions s ON u.id = s.user_id`,
     (err, rows) => {
-      if (err) return res.status(500).json([]);
+      if (err) {
+        console.error("Erro admin users:", err);
+        return res.status(500).json({ error: "Erro ao buscar usuários" });
+      }
+
       res.json(rows);
     }
   );
 });
 
-app.post("/api/crm", auth, (req, res) => {
-  const { name, email, phone } = req.body;
-
+// CANCELAR ASSINATURA
+app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
   db.run(
-    `INSERT INTO crm (user_id,name,email,phone) VALUES (?,?,?,?)`,
-    [req.user.id, name, email, phone],
-    () => res.json({ success: true })
+    `UPDATE subscriptions
+     SET status='pending', payment_id=NULL, expires_at=NULL
+     WHERE user_id=?`,
+    [req.params.id],
+    function (err) {
+      if (err) {
+        console.error("Erro cancelar:", err);
+        return res.status(500).json({ error: "Erro ao cancelar" });
+      }
+
+      res.json({ success: true });
+    }
   );
 });
 
@@ -223,11 +281,12 @@ app.post("/api/crm", auth, (req, res) => {
 
 app.use(express.static(PUBLIC_DIR));
 
-app.get("*", (req, res) => {
-  if (req.path.includes(".")) return res.status(404).end();
+app.get("/*", (_, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
+// =======================================================================
+// START
 // =======================================================================
 
 app.listen(PORT, () => {
