@@ -1,6 +1,12 @@
 // =======================================
-// LOGIN.JS — Ajustado para o seu server.js
+// LOGIN.JS — ALDRA (CORRIGIDO DEFINITIVO)
 // =======================================
+
+// 🔥 Detecta ambiente automaticamente
+const API_BASE =
+  window.location.hostname.includes("localhost")
+    ? "http://localhost:3000"
+    : ""; // no Render usa mesma origem
 
 // Função segura para ler JSON
 async function safeJson(res) {
@@ -34,7 +40,7 @@ if (loginForm) {
     }
 
     try {
-      const res = await fetch("/users/login", {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
@@ -54,14 +60,14 @@ if (loginForm) {
         return;
       }
 
-      // Salva token
+      // ✅ salva token
       localStorage.setItem("token", data.token);
 
       msg.textContent = "Login efetuado!";
       msg.style.color = "green";
 
       setTimeout(() => {
-        window.location.href = "/dashboard";
+        window.location.href = "/dashboard.html";
       }, 600);
 
     } catch (err) {
@@ -81,7 +87,7 @@ if (registerForm) {
   registerForm.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const name = document.getElementById("regName")?.value.trim() || null;
+    const name = document.getElementById("regName")?.value.trim() || "";
     const email = document.getElementById("regEmail").value.trim().toLowerCase();
     const password = document.getElementById("regPassword").value.trim();
     const regMsg = document.getElementById("regMsg");
@@ -102,7 +108,7 @@ if (registerForm) {
     }
 
     try {
-      const res = await fetch("/users/register", {
+      const res = await fetch(`${API_BASE}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password })
@@ -114,8 +120,10 @@ if (registerForm) {
         regMsg.textContent = "Conta criada com sucesso! Agora faça o login.";
         regMsg.style.color = "green";
 
-        // Limpa
-        if (document.getElementById("regName")) document.getElementById("regName").value = "";
+        // limpa campos
+        if (document.getElementById("regName"))
+          document.getElementById("regName").value = "";
+
         document.getElementById("regEmail").value = "";
         document.getElementById("regPassword").value = "";
 
