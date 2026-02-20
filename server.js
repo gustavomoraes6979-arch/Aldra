@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (VERSÃO COMPLETA + ADMIN FUNCIONANDO)
+// Aldra — server.js (FIX STATIC + RENDER + ADMIN OK)
 // =======================================================================
 
 import express from "express";
@@ -89,20 +89,15 @@ function auth(req, res, next) {
       `SELECT * FROM users WHERE id=?`,
       [decoded.id],
       (err, user) => {
-        if (err) {
-          console.error("Erro DB auth:", err);
-          return res.status(500).json({ error: "Erro interno" });
-        }
-
-        if (!user)
-          return res.status(401).json({ error: "Usuário inválido" });
+        if (err) return res.status(500).json({ error: "Erro interno" });
+        if (!user) return res.status(401).json({ error: "Usuário inválido" });
 
         req.user = user;
         req.user.is_admin = user.email === ADMIN_EMAIL;
         next();
       }
     );
-  } catch (e) {
+  } catch {
     return res.status(401).json({ error: "Token inválido" });
   }
 }
@@ -163,11 +158,7 @@ app.post("/auth/login", (req, res) => {
     `SELECT * FROM users WHERE email=?`,
     [email],
     (err, user) => {
-      if (err) {
-        console.error("Erro login:", err);
-        return res.status(500).json({ error: "Erro interno" });
-      }
-
+      if (err) return res.status(500).json({ error: "Erro interno" });
       if (!user)
         return res.status(404).json({ error: "Usuário não encontrado" });
 
@@ -188,10 +179,9 @@ app.post("/auth/login", (req, res) => {
 });
 
 // =======================================================================
-// ========================== ADMIN ROTAS ================================
+// ADMIN ROTAS
 // =======================================================================
 
-// STATS
 app.get("/admin/stats", auth, adminOnly, (req, res) => {
   db.get(`SELECT COUNT(*) as total FROM users`, (err, totalUsers) => {
     db.get(
@@ -215,24 +205,20 @@ app.get("/admin/stats", auth, adminOnly, (req, res) => {
   });
 });
 
-// LISTAR USUÁRIOS
 app.get("/admin/users", auth, adminOnly, (req, res) => {
   db.all(
     `SELECT u.id, u.name, u.email, s.status
      FROM users u
      LEFT JOIN subscriptions s ON u.id = s.user_id`,
     (err, rows) => {
-      if (err) {
-        console.error("Erro admin users:", err);
+      if (err)
         return res.status(500).json({ error: "Erro ao buscar usuários" });
-      }
 
       res.json(rows);
     }
   );
 });
 
-// CANCELAR ASSINATURA
 app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
   db.run(
     `UPDATE subscriptions
@@ -240,10 +226,8 @@ app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
      WHERE user_id=?`,
     [req.params.id],
     function (err) {
-      if (err) {
-        console.error("Erro cancelar:", err);
+      if (err)
         return res.status(500).json({ error: "Erro ao cancelar" });
-      }
 
       res.json({ success: true });
     }
@@ -251,12 +235,17 @@ app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
 });
 
 // =======================================================================
-// STATIC
+// 🔥 STATIC (ORDEM CORRETA)
 // =======================================================================
 
+// SERVE arquivos estáticos primeiro
 app.use(express.static(PUBLIC_DIR));
 
-app.get("/*", (_, res) => {
+// 🔥 fallback SOMENTE para rotas que não são arquivos
+app.get("*", (req, res) => {
+  if (req.path.includes(".")) {
+    return res.status(404).end();
+  }
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
