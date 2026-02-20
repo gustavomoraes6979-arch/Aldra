@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — Aldra SaaS (FIX RENDER FINAL)
+// dashboard.js — Aldra SaaS (PIX REATIVADO)
 // ==========================================
 
 (function () {
@@ -32,7 +32,7 @@
   }
 
   // ==========================================
-  // SAFE JSON (evita crash no Render)
+  // SAFE JSON
   // ==========================================
   async function safeJson(res) {
     try {
@@ -44,25 +44,43 @@
   }
 
   // ==========================================
-  // VERIFICA USUÁRIO
+  // DECODIFICA TOKEN (fallback)
+  // ==========================================
+  function decodeToken() {
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      return payload;
+    } catch {
+      return {};
+    }
+  }
+
+  // ==========================================
+  // VERIFICA USUÁRIO (COM FALLBACK)
   // ==========================================
   async function loadUser() {
     try {
+      // tenta endpoint (se existir)
       const res = await fetch("/api/me", {
         headers: { Authorization: "Bearer " + token }
       });
 
-      if (!res.ok) {
-        forceLogout();
+      if (res.ok) {
+        const data = await safeJson(res);
+        isAdmin = !!data.isAdmin;
+        console.log("👑 Admin via API:", isAdmin);
         return;
       }
 
-      const data = await safeJson(res);
-      isAdmin = !!data.isAdmin;
+      // 🔥 fallback pelo token
+      const decoded = decodeToken();
+      isAdmin = !!decoded.is_admin;
+      console.log("👑 Admin via token:", isAdmin);
 
     } catch (err) {
-      console.error("Erro loadUser:", err);
-      forceLogout();
+      console.warn("⚠️ loadUser fallback ativado");
+      const decoded = decodeToken();
+      isAdmin = !!decoded.is_admin;
     }
   }
 
@@ -71,6 +89,7 @@
   // ==========================================
   async function checkSubscription() {
 
+    // 👑 ADMIN LIBERADO
     if (isAdmin) {
       subscriptionActive = true;
       if (alertBox) alertBox.style.display = "none";
@@ -82,13 +101,15 @@
         headers: { Authorization: "Bearer " + token }
       });
 
-      if (res.status === 401) {
-        forceLogout();
+      // se endpoint não existir, não trava
+      if (!res.ok) {
+        console.warn("⚠️ subscription/status não disponível");
+        subscriptionActive = false;
+        if (alertBox) alertBox.style.display = "block";
         return;
       }
 
       const data = await safeJson(res);
-
       console.log("📊 subscription status:", data);
 
       // ✅ STATUS ATIVO
@@ -102,20 +123,7 @@
       subscriptionActive = false;
       if (alertBox) alertBox.style.display = "block";
 
-      // 🔥 TENTA MOSTRAR PIX SE EXISTIR
-      const pixData =
-        data?.point_of_interaction?.transaction_data ||
-        data?.transaction_data ||
-        null;
-
-      if (pixData?.qr_code_base64 && pixQr) {
-        pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
-        if (pixBox) pixBox.style.display = "block";
-      }
-
-      if (pixData?.qr_code && pixCopiaCola) {
-        pixCopiaCola.value = pixData.qr_code;
-      }
+      renderPix(data);
 
     } catch (err) {
       console.error("Erro checkSubscription:", err);
@@ -123,7 +131,37 @@
   }
 
   // ==========================================
-  // PAGAMENTO PIX (ALINHADO COM HTML)
+  // RENDER PIX (ROBUSTO)
+  // ==========================================
+  function renderPix(data) {
+    const pixData =
+      data?.point_of_interaction?.transaction_data ||
+      data?.transaction_data ||
+      data?.pix ||
+      null;
+
+    if (!pixData) {
+      console.warn("⚠️ Nenhum PIX encontrado");
+      return;
+    }
+
+    // QR
+    if (pixData.qr_code_base64 && pixQr) {
+      pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
+    }
+
+    // copia e cola
+    if (pixData.qr_code && pixCopiaCola) {
+      pixCopiaCola.value = pixData.qr_code;
+    }
+
+    if (pixBox) pixBox.style.display = "block";
+
+    console.log("✅ PIX renderizado");
+  }
+
+  // ==========================================
+  // PAGAMENTO PIX
   // ==========================================
   window.ativarPlano = async function () {
     try {
@@ -140,33 +178,11 @@
       }
 
       const data = await safeJson(res);
-
       console.log("💰 pagamento:", data);
 
-      const pixData =
-        data?.point_of_interaction?.transaction_data ||
-        data?.transaction_data ||
-        null;
+      renderPix(data);
 
-      if (!pixData) {
-        alert("PIX não retornado pela API.");
-        return;
-      }
-
-      // QR
-      if (pixData.qr_code_base64 && pixQr) {
-        pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
-      }
-
-      // copia e cola
-      if (pixData.qr_code && pixCopiaCola) {
-        pixCopiaCola.value = pixData.qr_code;
-      }
-
-      if (pixBox) pixBox.style.display = "block";
       if (alertBox) alertBox.style.display = "block";
-
-      console.log("✅ PIX exibido");
 
     } catch (err) {
       console.error("Erro ativarPlano:", err);
@@ -224,7 +240,7 @@
       }
 
       if (!res.ok) {
-        alert("Erro ao carregar CRM.");
+        console.warn("⚠️ CRM indisponível");
         return;
       }
 
