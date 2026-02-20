@@ -131,6 +131,7 @@ th{
   background:#f1f4f8;
 }
 
+/* 🔥 PIX */
 .pix-box{
   margin-top:20px;
   background:white;
@@ -138,6 +139,7 @@ th{
   border-radius:var(--radius);
   border:1px solid var(--borda);
   display:none;
+  text-align:center;
 }
 
 .pix-box img{
@@ -163,30 +165,31 @@ th{
 
 <!-- ALERTA ASSINATURA -->
 <div id="alert" class="alert">
-⚠️ Sua assinatura não está ativa.<br><br>
+  ⚠️ Sua assinatura não está ativa.<br><br>
 
-<button class="action" onclick="ativarPlano()">
-Assinar Plano Mensal — R$ 70,00
-</button>
+  <button class="action" onclick="ativarPlano()">
+    Assinar Plano Mensal — R$ 70,00
+  </button>
 
-<div class="pix-box" id="pixBox">
-<h3>📲 Escaneie o QR Code</h3>
+  <!-- 🔥 PIX -->
+  <div class="pix-box" id="pixBox">
+    <h3>📲 Escaneie o QR Code</h3>
 
-<img id="qrImage" />
+    <img id="qrImage" alt="QR Code PIX" />
 
-<p><strong>Copia e Cola:</strong></p>
-<textarea id="pixCode" readonly></textarea>
-</div>
+    <p><strong>Copia e Cola:</strong></p>
+    <textarea id="pixCode" readonly placeholder="Código PIX aparecerá aqui"></textarea>
+  </div>
 </div>
 
 <!-- MENU -->
 <div class="menu" id="menu">
-<button onclick="showSection('PDF')">📄 PDF</button>
-<button onclick="showSection('Contrato')">📝 Contrato</button>
-<button onclick="showSection('Cobranca')">💳 Cobrança</button>
-<button onclick="showSection('Relatorios')">📊 Relatórios</button>
-<button onclick="showSection('Chat')">💬 Chat IA</button>
-<button onclick="showSection('CRM')">👥 CRM</button>
+  <button onclick="showSection('PDF')">📄 PDF</button>
+  <button onclick="showSection('Contrato')">📝 Contrato</button>
+  <button onclick="showSection('Cobranca')">💳 Cobrança</button>
+  <button onclick="showSection('Relatorios')">📊 Relatórios</button>
+  <button onclick="showSection('Chat')">💬 Chat IA</button>
+  <button onclick="showSection('CRM')">👥 CRM</button>
 </div>
 
 <!-- SEÇÕES -->
@@ -216,8 +219,8 @@ Assinar Plano Mensal — R$ 70,00
 </table>
 </div>
 
-<!-- ✅ CAMINHO CORRETO -->
-<script src="/js/dashboard.js"></script>
+<!-- 🔥 SCRIPT NO FINAL (IMPORTANTE) -->
+<script defer src="/js/dashboard.js"></script>
 
 </body>
 </html>

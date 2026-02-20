@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — Aldra SaaS (PIX DEFINITIVO v2)
+// dashboard.js — Aldra SaaS (PIX DEFINITIVO v3)
 // ==========================================
 
 (function () {
@@ -15,16 +15,17 @@
   const alertBox = document.getElementById("alert");
   const crmLista = document.getElementById("crmLista");
 
-  // IDs do HTML
+  // PIX elements
   const pixBox = document.getElementById("pixBox");
   const pixQr = document.getElementById("qrImage");
   const pixCopiaCola = document.getElementById("pixCode");
 
   let subscriptionActive = false;
   let isAdmin = false;
+  let pixRendered = false;
 
   // ==========================================
-  // LOGOUT FORÇADO
+  // LOGOUT
   // ==========================================
   function forceLogout() {
     localStorage.removeItem("token");
@@ -38,7 +39,8 @@
     try {
       const text = await res.text();
 
-      // 🔥 evita erro Unexpected token '<'
+      if (!text) return {};
+
       if (text.trim().startsWith("<")) {
         console.error("❌ Backend retornou HTML:", text.slice(0, 120));
         return {};
@@ -46,13 +48,13 @@
 
       return JSON.parse(text);
     } catch (err) {
-      console.error("⚠️ Resposta não é JSON válido");
+      console.error("⚠️ JSON inválido");
       return {};
     }
   }
 
   // ==========================================
-  // DECODIFICA TOKEN
+  // TOKEN
   // ==========================================
   function decodeToken() {
     try {
@@ -62,16 +64,85 @@
     }
   }
 
-  // ==========================================
-  // LOAD USER
-  // ==========================================
   async function loadUser() {
+    const decoded = decodeToken();
+    isAdmin = !!decoded?.is_admin;
+    console.log("👑 Admin:", isAdmin);
+  }
+
+  // ==========================================
+  // 🔥 RENDER PIX ROBUSTO
+  // ==========================================
+  function renderPix(data) {
+    if (!data || pixRendered) return;
+
+    console.log("🔍 renderPix recebeu:", data);
+
+    const pixData =
+      data?.point_of_interaction?.transaction_data ||
+      data?.transaction_data ||
+      data?.pix ||
+      data;
+
+    if (!pixData) {
+      console.warn("⚠️ Nenhum PIX no payload");
+      return;
+    }
+
+    const base64 =
+      pixData?.qr_code_base64 ||
+      pixData?.qrCodeBase64 ||
+      pixData?.qr_code_base_64;
+
+    const copia =
+      pixData?.qr_code ||
+      pixData?.qrCode ||
+      pixData?.copia_cola;
+
+    // QR
+    if (base64 && pixQr) {
+      pixQr.src = "data:image/png;base64," + base64;
+      console.log("✅ QR carregado");
+    }
+
+    // Copia e cola
+    if (copia && pixCopiaCola) {
+      pixCopiaCola.value = copia;
+      console.log("✅ Copia e cola preenchido");
+    }
+
+    // mostra box
+    if (pixBox && (base64 || copia)) {
+      pixBox.style.display = "block";
+      pixRendered = true;
+      console.log("✅ PIX exibido");
+    }
+  }
+
+  // ==========================================
+  // 🔥 CRIA PIX AUTOMÁTICO
+  // ==========================================
+  async function createPixIfNeeded() {
+    if (pixRendered || isAdmin) return;
+
     try {
-      const decoded = decodeToken();
-      isAdmin = !!decoded?.is_admin;
-      console.log("👑 Admin:", isAdmin);
+      console.log("💰 Criando PIX automático...");
+
+      const res = await fetch("/subscription/create", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + token
+        }
+      });
+
+      const data = await safeJson(res);
+      console.log("💰 resposta create:", data);
+
+      if (res.ok) {
+        renderPix(data);
+      }
     } catch (err) {
-      console.warn("⚠️ Falha ao decodificar token");
+      console.error("❌ erro ao criar PIX:", err);
     }
   }
 
@@ -93,23 +164,24 @@
       const data = await safeJson(res);
       console.log("📊 subscription status:", data);
 
-      if (!res.ok) {
-        subscriptionActive = false;
-        if (alertBox) alertBox.style.display = "block";
-        renderPix(data);
-        return;
-      }
-
+      // assinatura ativa
       if (data.status === "active" || data.status === "approved") {
         subscriptionActive = true;
         if (alertBox) alertBox.style.display = "none";
         return;
       }
 
+      // assinatura inativa
       subscriptionActive = false;
       if (alertBox) alertBox.style.display = "block";
 
+      // tenta renderizar PIX vindo do status
       renderPix(data);
+
+      // 🔥 se não veio PIX → cria automaticamente
+      if (!pixRendered) {
+        await createPixIfNeeded();
+      }
 
     } catch (err) {
       console.error("❌ Erro checkSubscription:", err);
@@ -117,79 +189,13 @@
   }
 
   // ==========================================
-  // 🔥 RENDER PIX SUPER ROBUSTO v2
-  // ==========================================
-  function renderPix(data) {
-    console.log("🔍 renderPix recebeu:", data);
-
-    if (!data) return;
-
-    const pixData =
-      data?.point_of_interaction?.transaction_data ||
-      data?.transaction_data ||
-      data?.pix ||
-      data;
-
-    const base64 =
-      pixData?.qr_code_base64 ||
-      pixData?.qrCodeBase64 ||
-      pixData?.qr_code_base_64;
-
-    const copia =
-      pixData?.qr_code ||
-      pixData?.qrCode ||
-      pixData?.copia_cola;
-
-    // QR IMAGE
-    if (base64 && pixQr) {
-      pixQr.src = "data:image/png;base64," + base64;
-      console.log("✅ QR carregado");
-    } else {
-      console.warn("⚠️ qr_code_base64 não encontrado");
-    }
-
-    // COPIA E COLA
-    if (copia && pixCopiaCola) {
-      pixCopiaCola.value = copia;
-      console.log("✅ Copia e cola preenchido");
-    }
-
-    // MOSTRA BOX
-    if (pixBox && (base64 || copia)) {
-      pixBox.style.display = "block";
-    }
-  }
-
-  // ==========================================
-  // CRIAR PAGAMENTO PIX
+  // BOTÃO MANUAL
   // ==========================================
   window.ativarPlano = async function () {
-    try {
-      console.log("💰 Criando pagamento PIX...");
+    pixRendered = false;
+    await createPixIfNeeded();
 
-      const res = await fetch("/subscription/create", {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + token
-        }
-      });
-
-      const data = await safeJson(res);
-      console.log("💰 resposta create:", data);
-
-      if (!res.ok) {
-        alert(data.error || "Erro ao gerar pagamento.");
-        return;
-      }
-
-      renderPix(data);
-
-      if (alertBox) alertBox.style.display = "block";
-
-    } catch (err) {
-      console.error("❌ Erro ativarPlano:", err);
-      alert("Erro ao iniciar pagamento.");
-    }
+    if (alertBox) alertBox.style.display = "block";
   };
 
   // ==========================================
@@ -258,51 +264,6 @@
       console.error(err);
     }
   }
-
-  window.salvarCliente = async function () {
-    if (!subscriptionActive && !isAdmin) {
-      alert("Assinatura necessária.");
-      return;
-    }
-
-    const nome = document.getElementById("crmNome").value.trim();
-    const email = document.getElementById("crmEmail").value.trim();
-    const telefone = document.getElementById("crmTelefone").value.trim();
-
-    if (!nome || !email) {
-      alert("Nome e email são obrigatórios.");
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/crm", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + token
-        },
-        body: JSON.stringify({
-          name: nome,
-          email: email,
-          phone: telefone
-        })
-      });
-
-      if (!res.ok) {
-        alert("Erro ao salvar cliente.");
-        return;
-      }
-
-      document.getElementById("crmNome").value = "";
-      document.getElementById("crmEmail").value = "";
-      document.getElementById("crmTelefone").value = "";
-
-      loadClients();
-
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   // ==========================================
   // LOGOUT
