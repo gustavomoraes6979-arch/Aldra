@@ -1,6 +1,8 @@
 // ==========================================
-// dashboard.js — Aldra SaaS (VERSÃO AJUSTADA)
+// dashboard.js — Aldra SaaS (VERSÃO 3 - CACHE FIX)
 // ==========================================
+
+console.log("🚀 dashboard.js V3 carregado");
 
 (function () {
 
@@ -47,6 +49,7 @@
   async function loadUser() {
     const decoded = decodeToken();
     isAdmin = !!decoded?.is_admin;
+    console.log("Usuário admin:", isAdmin);
   }
 
   // ==========================================
@@ -54,13 +57,13 @@
   // ==========================================
   function showAlert() {
     subscriptionActive = false;
-    alertBox.style.display = "block";
+    if (alertBox) alertBox.style.display = "block";
   }
 
   function hideAlert() {
     subscriptionActive = true;
-    alertBox.style.display = "none";
-    pixBox.style.display = "none";
+    if (alertBox) alertBox.style.display = "none";
+    if (pixBox) pixBox.style.display = "none";
   }
 
   // ==========================================
@@ -72,22 +75,22 @@
       data?.point_of_interaction?.transaction_data ||
       data?.transaction_data;
 
-    console.log("PIX DATA:", pixData);
+    console.log("📦 PIX DATA:", pixData);
 
     if (!pixData) {
       alert("Erro ao gerar PIX.");
       return;
     }
 
-    if (pixData.qr_code_base64) {
+    if (pixData.qr_code_base64 && pixQr) {
       pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
     }
 
-    if (pixData.qr_code) {
+    if (pixData.qr_code && pixCopiaCola) {
       pixCopiaCola.value = pixData.qr_code;
     }
 
-    pixBox.style.display = "block";
+    if (pixBox) pixBox.style.display = "block";
   }
 
   // ==========================================
@@ -106,15 +109,16 @@
         headers: { Authorization: "Bearer " + token }
       });
 
+      console.log("Status HTTP:", res.status);
+
       if (!res.ok) {
-        console.log("Erro status:", res.status);
         showAlert();
         return;
       }
 
       const data = await safeJson(res);
 
-      console.log("Status recebido:", data);
+      console.log("📡 Status recebido:", data);
 
       if (data.status === "active" || data.status === "approved") {
         hideAlert();
@@ -135,7 +139,7 @@
 
     try {
 
-      pixBox.style.display = "none";
+      if (pixBox) pixBox.style.display = "none";
 
       const res = await fetch("/subscription/create", {
         method: "POST",
@@ -143,6 +147,8 @@
           Authorization: "Bearer " + token
         }
       });
+
+      console.log("Criar assinatura HTTP:", res.status);
 
       if (!res.ok) {
         alert("Erro ao criar pagamento.");
@@ -223,7 +229,7 @@
       });
 
     } catch (err) {
-      console.error(err);
+      console.error("Erro CRM:", err);
     }
   }
 
@@ -239,10 +245,10 @@
   // INIT
   // ==========================================
   async function init() {
+    console.log("🔄 Inicializando dashboard...");
     await loadUser();
     await checkSubscription();
 
-    // revalida automaticamente a cada 5s
     setInterval(checkSubscription, 5000);
 
     showSection("PDF");

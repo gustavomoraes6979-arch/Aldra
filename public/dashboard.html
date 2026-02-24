@@ -5,6 +5,11 @@
 <title>Aldra — Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+<!-- 🔥 FORÇA NÃO USAR CACHE -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+
 <style>
 :root{
   --azul-escuro:#053F6B;
@@ -155,7 +160,6 @@ th{
   <h1>🚀 Aldra — Plataforma Administrativa</h1>
   <div class="header-actions">
 
-    <!-- ADMIN TOTALMENTE SEPARADO -->
     <button class="btn-admin" onclick="window.location.href='/admin-auth.html'">
       🔐 Admin
     </button>
@@ -222,8 +226,8 @@ th{
 </table>
 </div>
 
-<!-- SCRIPT FINAL -->
-<script src="/js/dashboard.js"></script>
+<!-- 🔥 SCRIPT COM CACHE BUSTING -->
+<script src="/js/dashboard.js?v=3"></script>
 
 </body>
 </html>
