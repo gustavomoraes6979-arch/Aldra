@@ -155,6 +155,7 @@ th{
   <h1>🚀 Aldra — Plataforma Administrativa</h1>
   <div class="header-actions">
 
+    <!-- ADMIN TOTALMENTE SEPARADO -->
     <button class="btn-admin" onclick="window.location.href='/admin-auth.html'">
       🔐 Admin
     </button>
@@ -165,13 +166,15 @@ th{
 
 <!-- ALERTA ASSINATURA -->
 <div id="alert" class="alert">
-  ⚠️ Sua assinatura não está ativa.<br><br>
+  <div id="alertText">
+    ⚠️ Sua assinatura não está ativa.
+  </div>
 
-  <button class="action" onclick="ativarPlano()">
+  <button id="btnAssinar" class="action" onclick="ativarPlano()">
     Assinar Plano Mensal — R$ 70,00
   </button>
 
-  <!-- 🔥 PIX -->
+  <!-- PIX -->
   <div class="pix-box" id="pixBox">
     <h3>📲 Escaneie o QR Code</h3>
 
@@ -219,8 +222,8 @@ th{
 </table>
 </div>
 
-<!-- 🔥 SCRIPT NO FINAL (IMPORTANTE) -->
-<script defer src="/js/dashboard.js"></script>
+<!-- SCRIPT FINAL -->
+<script src="/js/dashboard.js"></script>
 
 </body>
 </html>

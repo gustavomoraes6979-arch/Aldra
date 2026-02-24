@@ -1,9 +1,8 @@
 // ==========================================
-// dashboard.js — Aldra SaaS (PIX DEFINITIVO v3)
+// dashboard.js — Aldra SaaS (PIX BOTÃO FIXO)
 // ==========================================
 
 (function () {
-  console.log("🚀 Dashboard SaaS iniciando...");
 
   const token = localStorage.getItem("token");
 
@@ -13,42 +12,23 @@
   }
 
   const alertBox = document.getElementById("alert");
-  const crmLista = document.getElementById("crmLista");
-
-  // PIX elements
   const pixBox = document.getElementById("pixBox");
   const pixQr = document.getElementById("qrImage");
   const pixCopiaCola = document.getElementById("pixCode");
+  const crmLista = document.getElementById("crmLista");
 
   let subscriptionActive = false;
   let isAdmin = false;
-  let pixRendered = false;
 
   // ==========================================
-  // LOGOUT
-  // ==========================================
-  function forceLogout() {
-    localStorage.removeItem("token");
-    window.location.href = "/";
-  }
-
-  // ==========================================
-  // SAFE JSON ULTRA ROBUSTO
+  // SAFE JSON
   // ==========================================
   async function safeJson(res) {
     try {
       const text = await res.text();
-
-      if (!text) return {};
-
-      if (text.trim().startsWith("<")) {
-        console.error("❌ Backend retornou HTML:", text.slice(0, 120));
-        return {};
-      }
-
+      if (!text || text.trim().startsWith("<")) return {};
       return JSON.parse(text);
-    } catch (err) {
-      console.error("⚠️ JSON inválido");
+    } catch {
       return {};
     }
   }
@@ -67,92 +47,38 @@
   async function loadUser() {
     const decoded = decodeToken();
     isAdmin = !!decoded?.is_admin;
-    console.log("👑 Admin:", isAdmin);
   }
 
   // ==========================================
-  // 🔥 RENDER PIX ROBUSTO
+  // RENDER PIX
   // ==========================================
   function renderPix(data) {
-    if (!data || pixRendered) return;
-
-    console.log("🔍 renderPix recebeu:", data);
 
     const pixData =
       data?.point_of_interaction?.transaction_data ||
-      data?.transaction_data ||
-      data?.pix ||
-      data;
+      data?.transaction_data;
 
-    if (!pixData) {
-      console.warn("⚠️ Nenhum PIX no payload");
-      return;
+    if (!pixData) return;
+
+    if (pixData.qr_code_base64) {
+      pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
     }
 
-    const base64 =
-      pixData?.qr_code_base64 ||
-      pixData?.qrCodeBase64 ||
-      pixData?.qr_code_base_64;
-
-    const copia =
-      pixData?.qr_code ||
-      pixData?.qrCode ||
-      pixData?.copia_cola;
-
-    // QR
-    if (base64 && pixQr) {
-      pixQr.src = "data:image/png;base64," + base64;
-      console.log("✅ QR carregado");
+    if (pixData.qr_code) {
+      pixCopiaCola.value = pixData.qr_code;
     }
 
-    // Copia e cola
-    if (copia && pixCopiaCola) {
-      pixCopiaCola.value = copia;
-      console.log("✅ Copia e cola preenchido");
-    }
-
-    // mostra box
-    if (pixBox && (base64 || copia)) {
-      pixBox.style.display = "block";
-      pixRendered = true;
-      console.log("✅ PIX exibido");
-    }
-  }
-
-  // ==========================================
-  // 🔥 CRIA PIX AUTOMÁTICO
-  // ==========================================
-  async function createPixIfNeeded() {
-    if (pixRendered || isAdmin) return;
-
-    try {
-      console.log("💰 Criando PIX automático...");
-
-      const res = await fetch("/subscription/create", {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + token
-        }
-      });
-
-      const data = await safeJson(res);
-      console.log("💰 resposta create:", data);
-
-      if (res.ok) {
-        renderPix(data);
-      }
-    } catch (err) {
-      console.error("❌ erro ao criar PIX:", err);
-    }
+    pixBox.style.display = "block";
   }
 
   // ==========================================
   // VERIFICA ASSINATURA
   // ==========================================
   async function checkSubscription() {
+
     if (isAdmin) {
       subscriptionActive = true;
-      if (alertBox) alertBox.style.display = "none";
+      alertBox.style.display = "none";
       return;
     }
 
@@ -162,40 +88,45 @@
       });
 
       const data = await safeJson(res);
-      console.log("📊 subscription status:", data);
 
-      // assinatura ativa
       if (data.status === "active" || data.status === "approved") {
         subscriptionActive = true;
-        if (alertBox) alertBox.style.display = "none";
+        alertBox.style.display = "none";
         return;
       }
 
-      // assinatura inativa
+      // assinatura pendente → mostra botão
       subscriptionActive = false;
-      if (alertBox) alertBox.style.display = "block";
-
-      // tenta renderizar PIX vindo do status
-      renderPix(data);
-
-      // 🔥 se não veio PIX → cria automaticamente
-      if (!pixRendered) {
-        await createPixIfNeeded();
-      }
+      alertBox.style.display = "block";
 
     } catch (err) {
-      console.error("❌ Erro checkSubscription:", err);
+      console.error(err);
     }
   }
 
   // ==========================================
-  // BOTÃO MANUAL
+  // BOTÃO ASSINAR (MANUAL)
   // ==========================================
   window.ativarPlano = async function () {
-    pixRendered = false;
-    await createPixIfNeeded();
 
-    if (alertBox) alertBox.style.display = "block";
+    try {
+
+      const res = await fetch("/subscription/create", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + token
+        }
+      });
+
+      const data = await safeJson(res);
+
+      if (res.ok) {
+        renderPix(data);
+      }
+
+    } catch (err) {
+      console.error("Erro ao criar PIX:", err);
+    }
   };
 
   // ==========================================
@@ -218,6 +149,7 @@
   }
 
   function showSection(name) {
+
     if (!subscriptionActive && !isAdmin) {
       alert("Sua assinatura está inativa.");
       return;
@@ -269,7 +201,8 @@
   // LOGOUT
   // ==========================================
   window.logout = function () {
-    forceLogout();
+    localStorage.removeItem("token");
+    window.location.href = "/";
   };
 
   // ==========================================
