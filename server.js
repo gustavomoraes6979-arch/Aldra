@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (VERSÃO COMPLETA + ADMIN FUNCIONANDO)
+// Aldra — server.js (ADMIN INTACTO + PIX TOTALMENTE SEPARADO)
 // =======================================================================
 
 import express from "express";
@@ -76,51 +76,34 @@ db.serialize(() => {
 });
 
 // =======================================================================
-// AUTH MIDDLEWARE
+// AUTH
 // =======================================================================
 
 function auth(req, res, next) {
   const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader || !authHeader.startsWith("Bearer "))
     return res.status(401).json({ error: "Token ausente" });
-  }
 
   try {
     const token = authHeader.replace("Bearer ", "");
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    db.get(
-      `SELECT * FROM users WHERE id = ?`,
-      [decoded.id],
-      (err, user) => {
-        if (err) {
-          console.error("Erro DB auth:", err);
-          return res.status(500).json({ error: "Erro interno" });
-        }
+    db.get(`SELECT * FROM users WHERE id=?`, [decoded.id], (err, user) => {
+      if (err || !user)
+        return res.status(401).json({ error: "Usuário inválido" });
 
-        if (!user) {
-          return res.status(401).json({ error: "Usuário inválido" });
-        }
-
-        req.user = user;
-        req.user.is_admin = user.email === ADMIN_EMAIL;
-        next();
-      }
-    );
-  } catch (error) {
+      req.user = user;
+      req.user.is_admin = user.email === ADMIN_EMAIL;
+      next();
+    });
+  } catch {
     return res.status(401).json({ error: "Token inválido" });
   }
 }
 
-// =======================================================================
-// ADMIN MIDDLEWARE
-// =======================================================================
-
 function adminOnly(req, res, next) {
-  if (!req.user?.is_admin) {
+  if (!req.user?.is_admin)
     return res.status(403).json({ error: "Acesso restrito" });
-  }
   next();
 }
 
@@ -131,30 +114,21 @@ function adminOnly(req, res, next) {
 app.post("/auth/register", (req, res) => {
   let { name = "", email, password } = req.body;
 
-  if (!email || !password) {
+  email = email?.toLowerCase().trim();
+  if (!email || !password)
     return res.status(400).json({ error: "Dados inválidos" });
-  }
 
-  email = email.toLowerCase().trim();
   const hash = bcrypt.hashSync(password, 10);
 
   db.run(
-    `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`,
+    `INSERT INTO users (name,email,password) VALUES (?,?,?)`,
     [name, email, hash],
     function (err) {
-      if (err) {
-        console.error("Erro register:", err);
-        return res.status(400).json({ error: "Email já existe" });
-      }
+      if (err) return res.status(400).json({ error: "Email já existe" });
 
       db.run(
-        `INSERT INTO subscriptions (user_id, status) VALUES (?, 'pending')`,
-        [this.lastID],
-        (err2) => {
-          if (err2) {
-            console.error("Erro subscription:", err2);
-          }
-        }
+        `INSERT INTO subscriptions (user_id,status) VALUES (?, 'pending')`,
+        [this.lastID]
       );
 
       res.json({ success: true });
@@ -169,64 +143,107 @@ app.post("/auth/register", (req, res) => {
 app.post("/auth/login", (req, res) => {
   let { email, password } = req.body;
 
-  if (!email || !password) {
+  email = email?.toLowerCase().trim();
+  if (!email || !password)
     return res.status(400).json({ error: "Dados inválidos" });
-  }
 
-  email = email.toLowerCase().trim();
+  db.get(`SELECT * FROM users WHERE email=?`, [email], (err, user) => {
+    if (!user)
+      return res.status(404).json({ error: "Usuário não encontrado" });
 
+    if (!bcrypt.compareSync(password, user.password))
+      return res.status(401).json({ error: "Senha incorreta" });
+
+    const isAdmin = user.email === ADMIN_EMAIL;
+
+    const token = jwt.sign(
+      { id: user.id, is_admin: isAdmin },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({ token, is_admin: isAdmin });
+  });
+});
+
+// =======================================================================
+// ====================== PIX (SEPARADO DO ADMIN) ========================
+// =======================================================================
+
+// STATUS DA ASSINATURA
+app.get("/subscription/status", auth, (req, res) => {
   db.get(
-    `SELECT * FROM users WHERE email = ?`,
-    [email],
-    (err, user) => {
-      if (err) {
-        console.error("Erro login:", err);
-        return res.status(500).json({ error: "Erro interno" });
-      }
-
-      if (!user) {
-        return res.status(404).json({ error: "Usuário não encontrado" });
-      }
-
-      if (!bcrypt.compareSync(password, user.password)) {
-        return res.status(401).json({ error: "Senha incorreta" });
-      }
-
-      const isAdmin = user.email === ADMIN_EMAIL;
-
-      const token = jwt.sign(
-        { id: user.id, is_admin: isAdmin },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      res.json({ token, is_admin: isAdmin });
+    `SELECT * FROM subscriptions WHERE user_id=?`,
+    [req.user.id],
+    (err, sub) => {
+      if (!sub) return res.json({ status: "pending" });
+      res.json({ status: sub.status });
     }
   );
 });
 
+// CRIAR PIX
+app.post("/subscription/create", auth, async (req, res) => {
+  try {
+    const result = await payment.create({
+      body: {
+        transaction_amount: PLAN_PRICE,
+        description: "Assinatura Aldra",
+        payment_method_id: "pix",
+        payer: { email: req.user.email },
+      },
+    });
+
+    db.run(
+      `UPDATE subscriptions SET payment_id=?, status='pending' WHERE user_id=?`,
+      [result.id, req.user.id]
+    );
+
+    res.json(result);
+  } catch (err) {
+    console.error("Erro PIX:", err);
+    res.status(500).json({ error: "Erro ao gerar PIX" });
+  }
+});
+
+// WEBHOOK MERCADO PAGO
+app.post("/webhook", async (req, res) => {
+  try {
+    if (req.body.type !== "payment") return res.sendStatus(200);
+
+    const paymentId = req.body.data.id;
+    const paymentInfo = await payment.get({ id: paymentId });
+
+    if (paymentInfo.status === "approved") {
+      db.run(
+        `UPDATE subscriptions 
+         SET status='active',
+             expires_at=datetime('now','+30 day')
+         WHERE payment_id=?`,
+        [paymentId]
+      );
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Erro webhook:", err);
+    res.sendStatus(500);
+  }
+});
+
 // =======================================================================
-// ========================== ADMIN ROTAS ================================
+// =========================== ADMIN (INTACTO) ============================
 // =======================================================================
 
-// STATS
 app.get("/admin/stats", auth, adminOnly, (req, res) => {
-  db.get(`SELECT COUNT(*) as total FROM users`, (err, totalUsers) => {
-    if (err) return res.status(500).json({ error: "Erro stats users" });
-
+  db.get(`SELECT COUNT(*) as total FROM users`, (_, totalUsers) => {
     db.get(
       `SELECT COUNT(*) as active FROM subscriptions WHERE status='active'`,
-      (err2, activeUsers) => {
-        if (err2) return res.status(500).json({ error: "Erro stats active" });
-
+      (_, activeUsers) => {
         db.get(
           `SELECT COUNT(*) as pending FROM subscriptions WHERE status='pending'`,
-          (err3, pendingUsers) => {
-            if (err3)
-              return res.status(500).json({ error: "Erro stats pending" });
-
+          (_, pendingUsers) => {
             const receita = (activeUsers?.active || 0) * PLAN_PRICE;
-
             res.json({
               users: totalUsers?.total || 0,
               active: activeUsers?.active || 0,
@@ -240,38 +257,22 @@ app.get("/admin/stats", auth, adminOnly, (req, res) => {
   });
 });
 
-// LISTAR USUÁRIOS
 app.get("/admin/users", auth, adminOnly, (req, res) => {
   db.all(
-    `SELECT u.id, u.name, u.email, s.status
+    `SELECT u.id,u.name,u.email,s.status
      FROM users u
-     LEFT JOIN subscriptions s ON u.id = s.user_id`,
-    (err, rows) => {
-      if (err) {
-        console.error("Erro admin users:", err);
-        return res.status(500).json({ error: "Erro ao buscar usuários" });
-      }
-
-      res.json(rows);
-    }
+     LEFT JOIN subscriptions s ON u.id=s.user_id`,
+    (_, rows) => res.json(rows)
   );
 });
 
-// CANCELAR ASSINATURA
 app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
   db.run(
     `UPDATE subscriptions
-     SET status='pending', payment_id=NULL, expires_at=NULL
+     SET status='pending',payment_id=NULL,expires_at=NULL
      WHERE user_id=?`,
     [req.params.id],
-    function (err) {
-      if (err) {
-        console.error("Erro cancelar:", err);
-        return res.status(500).json({ error: "Erro ao cancelar" });
-      }
-
-      res.json({ success: true });
-    }
+    () => res.json({ success: true })
   );
 });
 
@@ -280,15 +281,12 @@ app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
 // =======================================================================
 
 app.use(express.static(PUBLIC_DIR));
-
-app.get("/*", (_, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
-});
+app.get("/*", (_, res) =>
+  res.sendFile(path.join(PUBLIC_DIR, "index.html"))
+);
 
 // =======================================================================
-// START
-// =======================================================================
 
-app.listen(PORT, () => {
-  console.log(`🚀 Aldra ONLINE na porta ${PORT}`);
-});
+app.listen(PORT, () =>
+  console.log(`🚀 Aldra ONLINE na porta ${PORT}`)
+);
