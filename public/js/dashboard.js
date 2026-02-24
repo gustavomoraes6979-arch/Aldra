@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — Aldra SaaS (PIX BOTÃO FIXO)
+// dashboard.js — Aldra SaaS (VERSÃO AJUSTADA)
 // ==========================================
 
 (function () {
@@ -50,6 +50,20 @@
   }
 
   // ==========================================
+  // CONTROLE ALERTA
+  // ==========================================
+  function showAlert() {
+    subscriptionActive = false;
+    alertBox.style.display = "block";
+  }
+
+  function hideAlert() {
+    subscriptionActive = true;
+    alertBox.style.display = "none";
+    pixBox.style.display = "none";
+  }
+
+  // ==========================================
   // RENDER PIX
   // ==========================================
   function renderPix(data) {
@@ -58,7 +72,12 @@
       data?.point_of_interaction?.transaction_data ||
       data?.transaction_data;
 
-    if (!pixData) return;
+    console.log("PIX DATA:", pixData);
+
+    if (!pixData) {
+      alert("Erro ao gerar PIX.");
+      return;
+    }
 
     if (pixData.qr_code_base64) {
       pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
@@ -77,39 +96,46 @@
   async function checkSubscription() {
 
     if (isAdmin) {
-      subscriptionActive = true;
-      alertBox.style.display = "none";
+      hideAlert();
       return;
     }
 
     try {
+
       const res = await fetch("/subscription/status", {
         headers: { Authorization: "Bearer " + token }
       });
 
-      const data = await safeJson(res);
-
-      if (data.status === "active" || data.status === "approved") {
-        subscriptionActive = true;
-        alertBox.style.display = "none";
+      if (!res.ok) {
+        console.log("Erro status:", res.status);
+        showAlert();
         return;
       }
 
-      // assinatura pendente → mostra botão
-      subscriptionActive = false;
-      alertBox.style.display = "block";
+      const data = await safeJson(res);
+
+      console.log("Status recebido:", data);
+
+      if (data.status === "active" || data.status === "approved") {
+        hideAlert();
+      } else {
+        showAlert();
+      }
 
     } catch (err) {
-      console.error(err);
+      console.error("Erro ao verificar assinatura:", err);
+      showAlert();
     }
   }
 
   // ==========================================
-  // BOTÃO ASSINAR (MANUAL)
+  // BOTÃO ASSINAR
   // ==========================================
   window.ativarPlano = async function () {
 
     try {
+
+      pixBox.style.display = "none";
 
       const res = await fetch("/subscription/create", {
         method: "POST",
@@ -118,14 +144,18 @@
         }
       });
 
+      if (!res.ok) {
+        alert("Erro ao criar pagamento.");
+        return;
+      }
+
       const data = await safeJson(res);
 
-      if (res.ok) {
-        renderPix(data);
-      }
+      renderPix(data);
 
     } catch (err) {
       console.error("Erro ao criar PIX:", err);
+      alert("Erro ao criar pagamento.");
     }
   };
 
@@ -211,6 +241,10 @@
   async function init() {
     await loadUser();
     await checkSubscription();
+
+    // revalida automaticamente a cada 5s
+    setInterval(checkSubscription, 5000);
+
     showSection("PDF");
   }
 
