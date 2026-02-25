@@ -1,8 +1,8 @@
 // ==========================================
-// dashboard.js — Aldra SaaS (VERSÃO 3 - CACHE FIX)
+// dashboard.js — CLIENTE
 // ==========================================
 
-console.log("🚀 dashboard.js V3 carregado");
+console.log("🚀 Dashboard CLIENTE carregado");
 
 (function () {
 
@@ -20,11 +20,7 @@ console.log("🚀 dashboard.js V3 carregado");
   const crmLista = document.getElementById("crmLista");
 
   let subscriptionActive = false;
-  let isAdmin = false;
 
-  // ==========================================
-  // SAFE JSON
-  // ==========================================
   async function safeJson(res) {
     try {
       const text = await res.text();
@@ -35,81 +31,46 @@ console.log("🚀 dashboard.js V3 carregado");
     }
   }
 
-  // ==========================================
-  // TOKEN
-  // ==========================================
-  function decodeToken() {
-    try {
-      return JSON.parse(atob(token.split(".")[1]));
-    } catch {
-      return {};
-    }
-  }
-
-  async function loadUser() {
-    const decoded = decodeToken();
-    isAdmin = !!decoded?.is_admin;
-    console.log("Usuário admin:", isAdmin);
-  }
-
-  // ==========================================
-  // CONTROLE ALERTA
-  // ==========================================
   function showAlert() {
     subscriptionActive = false;
-    if (alertBox) alertBox.style.display = "block";
+    alertBox.style.display = "block";
   }
 
   function hideAlert() {
     subscriptionActive = true;
-    if (alertBox) alertBox.style.display = "none";
-    if (pixBox) pixBox.style.display = "none";
+    alertBox.style.display = "none";
+    pixBox.style.display = "none";
   }
 
-  // ==========================================
-  // RENDER PIX
-  // ==========================================
   function renderPix(data) {
 
     const pixData =
       data?.point_of_interaction?.transaction_data ||
       data?.transaction_data;
 
-    console.log("📦 PIX DATA:", pixData);
-
     if (!pixData) {
       alert("Erro ao gerar PIX.");
       return;
     }
 
-    if (pixData.qr_code_base64 && pixQr) {
+    if (pixData.qr_code_base64) {
       pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
     }
 
-    if (pixData.qr_code && pixCopiaCola) {
+    if (pixData.qr_code) {
       pixCopiaCola.value = pixData.qr_code;
     }
 
-    if (pixBox) pixBox.style.display = "block";
+    pixBox.style.display = "block";
   }
 
-  // ==========================================
-  // VERIFICA ASSINATURA
-  // ==========================================
   async function checkSubscription() {
-
-    if (isAdmin) {
-      hideAlert();
-      return;
-    }
 
     try {
 
       const res = await fetch("/subscription/status", {
         headers: { Authorization: "Bearer " + token }
       });
-
-      console.log("Status HTTP:", res.status);
 
       if (!res.ok) {
         showAlert();
@@ -118,7 +79,7 @@ console.log("🚀 dashboard.js V3 carregado");
 
       const data = await safeJson(res);
 
-      console.log("📡 Status recebido:", data);
+      console.log("Status cliente:", data);
 
       if (data.status === "active" || data.status === "approved") {
         hideAlert();
@@ -127,19 +88,16 @@ console.log("🚀 dashboard.js V3 carregado");
       }
 
     } catch (err) {
-      console.error("Erro ao verificar assinatura:", err);
+      console.error(err);
       showAlert();
     }
   }
 
-  // ==========================================
-  // BOTÃO ASSINAR
-  // ==========================================
   window.ativarPlano = async function () {
 
     try {
 
-      if (pixBox) pixBox.style.display = "none";
+      pixBox.style.display = "none";
 
       const res = await fetch("/subscription/create", {
         method: "POST",
@@ -147,8 +105,6 @@ console.log("🚀 dashboard.js V3 carregado");
           Authorization: "Bearer " + token
         }
       });
-
-      console.log("Criar assinatura HTTP:", res.status);
 
       if (!res.ok) {
         alert("Erro ao criar pagamento.");
@@ -160,14 +116,11 @@ console.log("🚀 dashboard.js V3 carregado");
       renderPix(data);
 
     } catch (err) {
-      console.error("Erro ao criar PIX:", err);
+      console.error(err);
       alert("Erro ao criar pagamento.");
     }
   };
 
-  // ==========================================
-  // SEÇÕES
-  // ==========================================
   const sections = [
     "sectionPDF",
     "sectionContrato",
@@ -186,7 +139,7 @@ console.log("🚀 dashboard.js V3 carregado");
 
   function showSection(name) {
 
-    if (!subscriptionActive && !isAdmin) {
+    if (!subscriptionActive) {
       alert("Sua assinatura está inativa.");
       return;
     }
@@ -201,9 +154,6 @@ console.log("🚀 dashboard.js V3 carregado");
 
   window.showSection = showSection;
 
-  // ==========================================
-  // CRM
-  // ==========================================
   async function loadClients() {
     try {
       const res = await fetch("/api/crm", {
@@ -229,28 +179,18 @@ console.log("🚀 dashboard.js V3 carregado");
       });
 
     } catch (err) {
-      console.error("Erro CRM:", err);
+      console.error(err);
     }
   }
 
-  // ==========================================
-  // LOGOUT
-  // ==========================================
   window.logout = function () {
     localStorage.removeItem("token");
     window.location.href = "/";
   };
 
-  // ==========================================
-  // INIT
-  // ==========================================
   async function init() {
-    console.log("🔄 Inicializando dashboard...");
-    await loadUser();
     await checkSubscription();
-
     setInterval(checkSubscription, 5000);
-
     showSection("PDF");
   }
 

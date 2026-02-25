@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (ADMIN INTACTO + PIX TOTALMENTE SEPARADO)
+// Aldra — server.js (ADMIN PROFISSIONAL + PIX SEPARADO)
 // =======================================================================
 
 import express from "express";
@@ -81,7 +81,7 @@ db.serialize(() => {
 
 function auth(req, res, next) {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer "))
+  if (!authHeader?.startsWith("Bearer "))
     return res.status(401).json({ error: "Token ausente" });
 
   try {
@@ -162,27 +162,29 @@ app.post("/auth/login", (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.json({ token, is_admin: isAdmin });
+    res.json({
+      token,
+      is_admin: isAdmin,
+      redirect: isAdmin ? "/admin-dashboard.html" : "/dashboard.html",
+    });
   });
 });
 
 // =======================================================================
-// ====================== PIX (SEPARADO DO ADMIN) ========================
+// =========================== PIX (CLIENTE) ==============================
 // =======================================================================
 
-// STATUS DA ASSINATURA
 app.get("/subscription/status", auth, (req, res) => {
   db.get(
     `SELECT * FROM subscriptions WHERE user_id=?`,
     [req.user.id],
-    (err, sub) => {
+    (_, sub) => {
       if (!sub) return res.json({ status: "pending" });
       res.json({ status: sub.status });
     }
   );
 });
 
-// CRIAR PIX
 app.post("/subscription/create", auth, async (req, res) => {
   try {
     const result = await payment.create({
@@ -206,7 +208,6 @@ app.post("/subscription/create", auth, async (req, res) => {
   }
 });
 
-// WEBHOOK MERCADO PAGO
 app.post("/webhook", async (req, res) => {
   try {
     if (req.body.type !== "payment") return res.sendStatus(200);
@@ -232,10 +233,11 @@ app.post("/webhook", async (req, res) => {
 });
 
 // =======================================================================
-// =========================== ADMIN (INTACTO) ============================
+// ========================== ADMIN PROFISSIONAL ==========================
 // =======================================================================
 
-app.get("/admin/stats", auth, adminOnly, (req, res) => {
+// MÉTRICAS
+app.get("/admin/metrics", auth, adminOnly, (req, res) => {
   db.get(`SELECT COUNT(*) as total FROM users`, (_, totalUsers) => {
     db.get(
       `SELECT COUNT(*) as active FROM subscriptions WHERE status='active'`,
@@ -244,11 +246,12 @@ app.get("/admin/stats", auth, adminOnly, (req, res) => {
           `SELECT COUNT(*) as pending FROM subscriptions WHERE status='pending'`,
           (_, pendingUsers) => {
             const receita = (activeUsers?.active || 0) * PLAN_PRICE;
+
             res.json({
-              users: totalUsers?.total || 0,
-              active: activeUsers?.active || 0,
-              pending: pendingUsers?.pending || 0,
-              receita_mensal: receita,
+              totalUsers: totalUsers?.total || 0,
+              activeSubscriptions: activeUsers?.active || 0,
+              pendingPayments: pendingUsers?.pending || 0,
+              monthlyRevenue: receita,
             });
           }
         );
@@ -257,20 +260,48 @@ app.get("/admin/stats", auth, adminOnly, (req, res) => {
   });
 });
 
+// LISTA COMPLETA
 app.get("/admin/users", auth, adminOnly, (req, res) => {
   db.all(
-    `SELECT u.id,u.name,u.email,s.status
-     FROM users u
-     LEFT JOIN subscriptions s ON u.id=s.user_id`,
+    `
+    SELECT 
+      u.id,
+      u.name,
+      u.email,
+      s.status as subscription_status,
+      s.payment_id,
+      s.expires_at
+    FROM users u
+    LEFT JOIN subscriptions s ON u.id=s.user_id
+    `,
     (_, rows) => res.json(rows)
   );
 });
 
+// APROVAR MANUAL
+app.post("/admin/approve/:id", auth, adminOnly, (req, res) => {
+  db.run(
+    `
+    UPDATE subscriptions
+    SET status='active',
+        expires_at=datetime('now','+30 day')
+    WHERE user_id=?
+    `,
+    [req.params.id],
+    () => res.json({ success: true })
+  );
+});
+
+// CANCELAR
 app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
   db.run(
-    `UPDATE subscriptions
-     SET status='pending',payment_id=NULL,expires_at=NULL
-     WHERE user_id=?`,
+    `
+    UPDATE subscriptions
+    SET status='pending',
+        payment_id=NULL,
+        expires_at=NULL
+    WHERE user_id=?
+    `,
     [req.params.id],
     () => res.json({ success: true })
   );
@@ -281,6 +312,7 @@ app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
 // =======================================================================
 
 app.use(express.static(PUBLIC_DIR));
+
 app.get("/*", (_, res) =>
   res.sendFile(path.join(PUBLIC_DIR, "index.html"))
 );
