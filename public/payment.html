@@ -33,10 +33,9 @@
       margin: 20px 0;
     }
 
-    #qrcode {
+    #qrcode img {
       margin: 20px auto;
-      display: flex;
-      justify-content: center;
+      width: 220px;
     }
 
     .pix-box {
@@ -59,6 +58,21 @@
       font-size: 14px;
       color: #555;
     }
+
+    button {
+      margin-top: 20px;
+      padding: 12px 18px;
+      border-radius: 8px;
+      border: none;
+      background: #0A6CBD;
+      color: #fff;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
   </style>
 </head>
 <body>
@@ -73,6 +87,8 @@
 
   <div class="pix-box" id="pixCode"></div>
 
+  <button onclick="gerarPix()">Gerar PIX</button>
+
   <div class="status" id="statusMsg">
     ⏳ Aguardando pagamento
   </div>
@@ -82,44 +98,92 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-
 <script>
 /* ======================================================
-   SEGURANÇA BÁSICA
+   SEGURANÇA
 ====================================================== */
+
 const token = localStorage.getItem("token");
 if (!token) {
   window.location.href = "/";
 }
 
+const qrContainer = document.getElementById("qrcode");
+const pixCodeEl = document.getElementById("pixCode");
+const statusMsg = document.getElementById("statusMsg");
+
 /* ======================================================
-   PIX VISUAL
+   SAFE JSON
 ====================================================== */
-const PIX_CPF = "46204755803";
-const PIX_TEXT = `
-PIX - Aldra Assinatura
-CPF: ${PIX_CPF}
-Valor: R$ 70,00
-Descrição: Assinatura Aldra
-`.trim();
-
-function gerarPix() {
-  document.getElementById("pixCode").innerText = PIX_TEXT;
-
-  new QRCode(document.getElementById("qrcode"), {
-    text: PIX_TEXT,
-    width: 220,
-    height: 220
-  });
+async function safeJson(res) {
+  try {
+    const text = await res.text();
+    if (!text || text.trim().startsWith("<")) return {};
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
 }
 
 /* ======================================================
-   VERIFICAÇÃO DE ASSINATURA (SAFE)
+   GERAR PIX REAL VIA BACKEND
+====================================================== */
+async function gerarPix() {
+
+  qrContainer.innerHTML = "";
+  pixCodeEl.innerText = "";
+  statusMsg.innerText = "⏳ Gerando PIX...";
+
+  try {
+
+    const res = await fetch("/subscription/create", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + token
+      }
+    });
+
+    if (!res.ok) {
+      statusMsg.innerText = "❌ Erro ao gerar pagamento.";
+      return;
+    }
+
+    const data = await safeJson(res);
+
+    const pixData =
+      data?.point_of_interaction?.transaction_data ||
+      data?.transaction_data;
+
+    if (!pixData) {
+      statusMsg.innerText = "❌ Erro ao gerar PIX.";
+      return;
+    }
+
+    if (pixData.qr_code_base64) {
+      const img = document.createElement("img");
+      img.src = "data:image/png;base64," + pixData.qr_code_base64;
+      qrContainer.appendChild(img);
+    }
+
+    if (pixData.qr_code) {
+      pixCodeEl.innerText = pixData.qr_code;
+    }
+
+    statusMsg.innerText = "⏳ Aguardando pagamento...";
+
+  } catch (err) {
+    console.error(err);
+    statusMsg.innerText = "❌ Erro ao gerar pagamento.";
+  }
+}
+
+/* ======================================================
+   VERIFICAR STATUS REAL PELO BANCO
 ====================================================== */
 async function verificarStatus() {
   try {
-    const res = await fetch("/subscription/status", {
+
+    const res = await fetch("/auth/me", {
       headers: {
         Authorization: "Bearer " + token
       }
@@ -127,30 +191,20 @@ async function verificarStatus() {
 
     if (!res.ok) return;
 
-    const text = await res.text();
-
-    // proteção contra HTML inesperado
-    if (text.startsWith("<")) return;
-
-    const data = JSON.parse(text);
+    const data = await safeJson(res);
 
     if (data.subscription_status === "active") {
-      document.getElementById("statusMsg").innerText =
-        "✅ Pagamento confirmado!";
-      setTimeout(() => location.href = "/dashboard", 1500);
-    }
-
-    if (data.subscription_status === "blocked") {
-      document.getElementById("statusMsg").innerText =
-        "⛔ Assinatura bloqueada";
+      statusMsg.innerText = "✅ Pagamento confirmado!";
+      setTimeout(() => {
+        window.location.href = "/dashboard.html";
+      }, 1500);
     }
 
   } catch (e) {
-    console.log("Aguardando pagamento...");
+    console.log("Aguardando confirmação...");
   }
 }
 
-gerarPix();
 setInterval(verificarStatus, 5000);
 </script>
 

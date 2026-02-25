@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (ADMIN PROFISSIONAL + PIX SEPARADO)
+// Aldra — server.js (VERSÃO FINAL ESTÁVEL COM PERSISTÊNCIA DE LOGIN)
 // =======================================================================
 
 import express from "express";
@@ -126,6 +126,7 @@ app.post("/auth/register", (req, res) => {
     function (err) {
       if (err) return res.status(400).json({ error: "Email já existe" });
 
+      // sempre cria subscription junto
       db.run(
         `INSERT INTO subscriptions (user_id,status) VALUES (?, 'pending')`,
         [this.lastID]
@@ -137,7 +138,7 @@ app.post("/auth/register", (req, res) => {
 });
 
 // =======================================================================
-// LOGIN
+// LOGIN (AGORA RETORNA STATUS REAL)
 // =======================================================================
 
 app.post("/auth/login", (req, res) => {
@@ -162,16 +163,46 @@ app.post("/auth/login", (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.json({
-      token,
-      is_admin: isAdmin,
-      redirect: isAdmin ? "/admin-dashboard.html" : "/dashboard.html",
-    });
+    // 🔥 buscar assinatura real
+    db.get(
+      `SELECT status, expires_at FROM subscriptions WHERE user_id=?`,
+      [user.id],
+      (_, sub) => {
+        res.json({
+          token,
+          is_admin: isAdmin,
+          subscription_status: sub?.status || "pending",
+          expires_at: sub?.expires_at || null,
+          redirect: isAdmin
+            ? "/admin-dashboard.html"
+            : "/dashboard.html",
+        });
+      }
+    );
   });
 });
 
 // =======================================================================
-// =========================== PIX (CLIENTE) ==============================
+// ROTA PARA VALIDAR LOGIN SEMPRE PELO BANCO
+// =======================================================================
+
+app.get("/auth/me", auth, (req, res) => {
+  db.get(
+    `SELECT status, expires_at FROM subscriptions WHERE user_id=?`,
+    [req.user.id],
+    (_, sub) => {
+      res.json({
+        id: req.user.id,
+        email: req.user.email,
+        subscription_status: sub?.status || "pending",
+        expires_at: sub?.expires_at || null,
+      });
+    }
+  );
+});
+
+// =======================================================================
+// PIX (CLIENTE)
 // =======================================================================
 
 app.get("/subscription/status", auth, (req, res) => {
@@ -233,10 +264,9 @@ app.post("/webhook", async (req, res) => {
 });
 
 // =======================================================================
-// ========================== ADMIN PROFISSIONAL ==========================
+// ADMIN
 // =======================================================================
 
-// MÉTRICAS
 app.get("/admin/metrics", auth, adminOnly, (req, res) => {
   db.get(`SELECT COUNT(*) as total FROM users`, (_, totalUsers) => {
     db.get(
@@ -260,7 +290,6 @@ app.get("/admin/metrics", auth, adminOnly, (req, res) => {
   });
 });
 
-// LISTA COMPLETA
 app.get("/admin/users", auth, adminOnly, (req, res) => {
   db.all(
     `
@@ -278,7 +307,6 @@ app.get("/admin/users", auth, adminOnly, (req, res) => {
   );
 });
 
-// APROVAR MANUAL
 app.post("/admin/approve/:id", auth, adminOnly, (req, res) => {
   db.run(
     `
@@ -292,7 +320,6 @@ app.post("/admin/approve/:id", auth, adminOnly, (req, res) => {
   );
 });
 
-// CANCELAR
 app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
   db.run(
     `

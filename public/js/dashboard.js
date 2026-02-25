@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — CLIENTE
+// dashboard.js — CLIENTE (VERSÃO FINAL SEGURA)
 // ==========================================
 
 console.log("🚀 Dashboard CLIENTE carregado");
@@ -64,11 +64,12 @@ console.log("🚀 Dashboard CLIENTE carregado");
     pixBox.style.display = "block";
   }
 
+  // 🔥 AGORA VALIDA PELO BANCO USANDO /auth/me
   async function checkSubscription() {
 
     try {
 
-      const res = await fetch("/subscription/status", {
+      const res = await fetch("/auth/me", {
         headers: { Authorization: "Bearer " + token }
       });
 
@@ -79,9 +80,9 @@ console.log("🚀 Dashboard CLIENTE carregado");
 
       const data = await safeJson(res);
 
-      console.log("Status cliente:", data);
+      console.log("Status real do banco:", data);
 
-      if (data.status === "active" || data.status === "approved") {
+      if (data.subscription_status === "active") {
         hideAlert();
       } else {
         showAlert();
@@ -190,7 +191,7 @@ console.log("🚀 Dashboard CLIENTE carregado");
 
   async function init() {
     await checkSubscription();
-    setInterval(checkSubscription, 5000);
+    setInterval(checkSubscription, 5000); // atualiza automático após pagar
     showSection("PDF");
   }
 
