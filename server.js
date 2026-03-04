@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (VERSÃO FINAL ESTÁVEL COM PERSISTÊNCIA DE LOGIN)
+// Aldra — server.js (VERSÃO FINAL ESTÁVEL E BLINDADA)
 // =======================================================================
 
 import express from "express";
@@ -81,6 +81,7 @@ db.serialize(() => {
 
 function auth(req, res, next) {
   const authHeader = req.headers.authorization;
+
   if (!authHeader?.startsWith("Bearer "))
     return res.status(401).json({ error: "Token ausente" });
 
@@ -115,6 +116,7 @@ app.post("/auth/register", (req, res) => {
   let { name = "", email, password } = req.body;
 
   email = email?.toLowerCase().trim();
+
   if (!email || !password)
     return res.status(400).json({ error: "Dados inválidos" });
 
@@ -126,7 +128,6 @@ app.post("/auth/register", (req, res) => {
     function (err) {
       if (err) return res.status(400).json({ error: "Email já existe" });
 
-      // sempre cria subscription junto
       db.run(
         `INSERT INTO subscriptions (user_id,status) VALUES (?, 'pending')`,
         [this.lastID]
@@ -138,13 +139,14 @@ app.post("/auth/register", (req, res) => {
 });
 
 // =======================================================================
-// LOGIN (AGORA RETORNA STATUS REAL)
+// LOGIN (VALIDA EXPIRAÇÃO AUTOMÁTICA)
 // =======================================================================
 
 app.post("/auth/login", (req, res) => {
   let { email, password } = req.body;
 
   email = email?.toLowerCase().trim();
+
   if (!email || !password)
     return res.status(400).json({ error: "Dados inválidos" });
 
@@ -163,15 +165,34 @@ app.post("/auth/login", (req, res) => {
       { expiresIn: "7d" }
     );
 
-    // 🔥 buscar assinatura real
     db.get(
       `SELECT status, expires_at FROM subscriptions WHERE user_id=?`,
       [user.id],
       (_, sub) => {
+        let status = sub?.status || "pending";
+
+        if (status === "active" && sub?.expires_at) {
+          const now = new Date();
+          const expires = new Date(sub.expires_at);
+
+          if (now > expires) {
+            status = "expired";
+
+            db.run(
+              `UPDATE subscriptions 
+               SET status='pending',
+                   payment_id=NULL,
+                   expires_at=NULL
+               WHERE user_id=?`,
+              [user.id]
+            );
+          }
+        }
+
         res.json({
           token,
           is_admin: isAdmin,
-          subscription_status: sub?.status || "pending",
+          subscription_status: status,
           expires_at: sub?.expires_at || null,
           redirect: isAdmin
             ? "/admin-dashboard.html"
@@ -183,7 +204,7 @@ app.post("/auth/login", (req, res) => {
 });
 
 // =======================================================================
-// ROTA PARA VALIDAR LOGIN SEMPRE PELO BANCO
+// VALIDAR USUÁRIO ATUAL
 // =======================================================================
 
 app.get("/auth/me", auth, (req, res) => {
@@ -202,19 +223,42 @@ app.get("/auth/me", auth, (req, res) => {
 });
 
 // =======================================================================
-// PIX (CLIENTE)
+// SUBSCRIPTION STATUS
 // =======================================================================
 
 app.get("/subscription/status", auth, (req, res) => {
   db.get(
     `SELECT * FROM subscriptions WHERE user_id=?`,
     [req.user.id],
-    (_, sub) => {
+    (err, sub) => {
       if (!sub) return res.json({ status: "pending" });
+
+      if (sub.status === "active" && sub.expires_at) {
+        const now = new Date();
+        const expires = new Date(sub.expires_at);
+
+        if (now > expires) {
+          db.run(
+            `UPDATE subscriptions 
+             SET status='pending',
+                 payment_id=NULL,
+                 expires_at=NULL
+             WHERE user_id=?`,
+            [req.user.id]
+          );
+
+          return res.json({ status: "expired" });
+        }
+      }
+
       res.json({ status: sub.status });
     }
   );
 });
+
+// =======================================================================
+// CRIAR PIX
+// =======================================================================
 
 app.post("/subscription/create", auth, async (req, res) => {
   try {
@@ -239,6 +283,10 @@ app.post("/subscription/create", auth, async (req, res) => {
   }
 });
 
+// =======================================================================
+// WEBHOOK MERCADO PAGO
+// =======================================================================
+
 app.post("/webhook", async (req, res) => {
   try {
     if (req.body.type !== "payment") return res.sendStatus(200);
@@ -251,6 +299,16 @@ app.post("/webhook", async (req, res) => {
         `UPDATE subscriptions 
          SET status='active',
              expires_at=datetime('now','+30 day')
+         WHERE payment_id=?`,
+        [paymentId]
+      );
+    }
+
+    if (paymentInfo.status === "rejected") {
+      db.run(
+        `UPDATE subscriptions 
+         SET status='pending',
+             payment_id=NULL
          WHERE payment_id=?`,
         [paymentId]
       );
