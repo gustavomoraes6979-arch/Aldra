@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (VERSÃO FINAL ESTÁVEL E BLINDADA)
+// Aldra — server.js (ERP + IA GROQ COMPLETO ESTÁVEL)
 // =======================================================================
 
 import express from "express";
@@ -19,18 +19,19 @@ dotenv.config();
 // =======================================================================
 
 const ADMIN_EMAIL = "moraes_gu@hotmail.com".toLowerCase();
-const PLAN_PRICE = 70;
+const PLAN_PRICE = 1;
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
 if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
 
-const client = new MercadoPagoConfig({
+const mpClient = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN.trim(),
 });
-const payment = new Payment(client);
+
+const payment = new Payment(mpClient);
 
 // =======================================================================
-// PATHS
+// PATH
 // =======================================================================
 
 const __filename = fileURLToPath(import.meta.url);
@@ -53,343 +54,474 @@ app.use(express.json());
 
 const db = new sqlite3.Database(path.join(__dirname, "adminIA.db"));
 
+function dbRun(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(query, params, function (err) {
+      if (err) reject(err);
+      else resolve(this);
+    });
+  });
+}
+
+function dbGet(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(query, params, (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+}
+
+function dbAll(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(query, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
+}
+
 db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT,
-      email TEXT UNIQUE,
-      password TEXT
-    )
-  `);
 
   db.run(`
-    CREATE TABLE IF NOT EXISTS subscriptions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER UNIQUE,
-      status TEXT DEFAULT 'pending',
-      payment_id TEXT,
-      expires_at DATETIME,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+  CREATE TABLE IF NOT EXISTS users(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    email TEXT UNIQUE,
+    password TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`
+  CREATE TABLE IF NOT EXISTS subscriptions(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER UNIQUE,
+    status TEXT DEFAULT 'pending',
+    payment_id TEXT,
+    expires_at DATETIME
+  )`);
+
+  db.run(`
+  CREATE TABLE IF NOT EXISTS crm_clients(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    name TEXT,
+    phone TEXT,
+    email TEXT,
+    pipeline_stage TEXT DEFAULT 'lead',
+    deal_value REAL DEFAULT 0,
+    last_contact DATETIME,
+    next_followup DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`
+  CREATE TABLE IF NOT EXISTS accounts(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    type TEXT,
+    description TEXT,
+    value REAL,
+    due_date DATETIME,
+    status TEXT DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`
+  CREATE TABLE IF NOT EXISTS products(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    name TEXT,
+    sku TEXT,
+    cost REAL,
+    price REAL,
+    quantity INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`
+  CREATE TABLE IF NOT EXISTS stock_history(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER,
+    type TEXT,
+    quantity INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
 });
 
 // =======================================================================
 // AUTH
 // =======================================================================
 
-function auth(req, res, next) {
-  const authHeader = req.headers.authorization;
+async function auth(req, res, next) {
 
-  if (!authHeader?.startsWith("Bearer "))
+  const header = req.headers.authorization;
+
+  if (!header)
     return res.status(401).json({ error: "Token ausente" });
 
   try {
-    const token = authHeader.replace("Bearer ", "");
+
+    const token = header.replace("Bearer ", "");
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    db.get(`SELECT * FROM users WHERE id=?`, [decoded.id], (err, user) => {
-      if (err || !user)
-        return res.status(401).json({ error: "Usuário inválido" });
+    const user = await dbGet(`SELECT * FROM users WHERE id=?`, [decoded.id]);
 
-      req.user = user;
-      req.user.is_admin = user.email === ADMIN_EMAIL;
-      next();
-    });
+    if (!user)
+      return res.status(401).json({ error: "Usuário inválido" });
+
+    user.is_admin = user.email === ADMIN_EMAIL;
+
+    req.user = user;
+
+    next();
+
   } catch {
-    return res.status(401).json({ error: "Token inválido" });
+
+    res.status(401).json({ error: "Token inválido" });
+
   }
+
 }
 
 function adminOnly(req, res, next) {
+
   if (!req.user?.is_admin)
-    return res.status(403).json({ error: "Acesso restrito" });
+    return res.status(403).json({ error: "Admin apenas" });
+
   next();
+
 }
 
 // =======================================================================
 // REGISTER
 // =======================================================================
 
-app.post("/auth/register", (req, res) => {
-  let { name = "", email, password } = req.body;
+app.post("/auth/register", async (req, res) => {
 
-  email = email?.toLowerCase().trim();
+  try {
 
-  if (!email || !password)
-    return res.status(400).json({ error: "Dados inválidos" });
+    const { name, email, password } = req.body;
 
-  const hash = bcrypt.hashSync(password, 10);
+    if (!email || !password)
+      return res.status(400).json({ error: "Dados inválidos" });
 
-  db.run(
-    `INSERT INTO users (name,email,password) VALUES (?,?,?)`,
-    [name, email, hash],
-    function (err) {
-      if (err) return res.status(400).json({ error: "Email já existe" });
+    const hash = bcrypt.hashSync(password, 10);
 
-      db.run(
-        `INSERT INTO subscriptions (user_id,status) VALUES (?, 'pending')`,
-        [this.lastID]
-      );
+    const result = await dbRun(
+      `INSERT INTO users(name,email,password) VALUES(?,?,?)`,
+      [name, email.toLowerCase(), hash]
+    );
 
-      res.json({ success: true });
-    }
-  );
+    await dbRun(
+      `INSERT INTO subscriptions(user_id,status)
+       VALUES(?, 'pending')`,
+      [result.lastID]
+    );
+
+    res.json({ success: true });
+
+  } catch {
+
+    res.status(400).json({ error: "Email já existe" });
+
+  }
+
 });
 
 // =======================================================================
-// LOGIN (VALIDA EXPIRAÇÃO AUTOMÁTICA)
+// LOGIN
 // =======================================================================
 
-app.post("/auth/login", (req, res) => {
-  let { email, password } = req.body;
+app.post("/auth/login", async (req, res) => {
 
-  email = email?.toLowerCase().trim();
+  const { email, password } = req.body;
 
-  if (!email || !password)
-    return res.status(400).json({ error: "Dados inválidos" });
+  const user = await dbGet(
+    `SELECT * FROM users WHERE email=?`,
+    [email.toLowerCase()]
+  );
 
-  db.get(`SELECT * FROM users WHERE email=?`, [email], (err, user) => {
-    if (!user)
-      return res.status(404).json({ error: "Usuário não encontrado" });
+  if (!user)
+    return res.status(404).json({ error: "Usuário não encontrado" });
 
-    if (!bcrypt.compareSync(password, user.password))
-      return res.status(401).json({ error: "Senha incorreta" });
+  if (!bcrypt.compareSync(password, user.password))
+    return res.status(401).json({ error: "Senha incorreta" });
 
-    const isAdmin = user.email === ADMIN_EMAIL;
+  const token = jwt.sign(
+    { id: user.id },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
 
-    const token = jwt.sign(
-      { id: user.id, is_admin: isAdmin },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    db.get(
-      `SELECT status, expires_at FROM subscriptions WHERE user_id=?`,
-      [user.id],
-      (_, sub) => {
-        let status = sub?.status || "pending";
-
-        if (status === "active" && sub?.expires_at) {
-          const now = new Date();
-          const expires = new Date(sub.expires_at);
-
-          if (now > expires) {
-            status = "expired";
-
-            db.run(
-              `UPDATE subscriptions 
-               SET status='pending',
-                   payment_id=NULL,
-                   expires_at=NULL
-               WHERE user_id=?`,
-              [user.id]
-            );
-          }
-        }
-
-        res.json({
-          token,
-          is_admin: isAdmin,
-          subscription_status: status,
-          expires_at: sub?.expires_at || null,
-          redirect: isAdmin
-            ? "/admin-dashboard.html"
-            : "/dashboard.html",
-        });
-      }
-    );
+  res.json({
+    token,
+    redirect:
+      user.email === ADMIN_EMAIL
+        ? "/admin-dashboard.html"
+        : "/dashboard.html",
   });
+
 });
 
 // =======================================================================
-// VALIDAR USUÁRIO ATUAL
+// AUTH ME
 // =======================================================================
 
-app.get("/auth/me", auth, (req, res) => {
-  db.get(
-    `SELECT status, expires_at FROM subscriptions WHERE user_id=?`,
-    [req.user.id],
-    (_, sub) => {
-      res.json({
-        id: req.user.id,
-        email: req.user.email,
-        subscription_status: sub?.status || "pending",
-        expires_at: sub?.expires_at || null,
-      });
-    }
+app.get("/auth/me", auth, async (req, res) => {
+
+  const sub = await dbGet(
+    `SELECT status FROM subscriptions WHERE user_id=?`,
+    [req.user.id]
   );
+
+  res.json({
+    email: req.user.email,
+    is_admin: req.user.is_admin,
+    subscription_status: sub?.status || "pending"
+  });
+
 });
 
 // =======================================================================
-// SUBSCRIPTION STATUS
+// CRM
 // =======================================================================
 
-app.get("/subscription/status", auth, (req, res) => {
-  db.get(
-    `SELECT * FROM subscriptions WHERE user_id=?`,
-    [req.user.id],
-    (err, sub) => {
-      if (!sub) return res.json({ status: "pending" });
+app.get("/crm", auth, async (req, res) => {
 
-      if (sub.status === "active" && sub.expires_at) {
-        const now = new Date();
-        const expires = new Date(sub.expires_at);
+  const rows = await dbAll(
+    `SELECT * FROM crm_clients WHERE user_id=?`,
+    [req.user.id]
+  );
 
-        if (now > expires) {
-          db.run(
-            `UPDATE subscriptions 
-             SET status='pending',
-                 payment_id=NULL,
-                 expires_at=NULL
-             WHERE user_id=?`,
-            [req.user.id]
-          );
+  res.json(rows);
 
-          return res.json({ status: "expired" });
-        }
+});
+
+app.post("/crm", auth, async (req, res) => {
+
+  const { name, phone, email, pipeline_stage, deal_value } = req.body;
+
+  if (!name)
+    return res.status(400).json({ error: "Nome obrigatório" });
+
+  await dbRun(
+    `INSERT INTO crm_clients(user_id,name,phone,email,pipeline_stage,deal_value)
+     VALUES(?,?,?,?,?,?)`,
+    [req.user.id, name, phone, email, pipeline_stage || "lead", deal_value || 0]
+  );
+
+  res.json({ success: true });
+
+});
+
+// =======================================================================
+// FINANCEIRO
+// =======================================================================
+
+app.get("/finance/accounts", auth, async (req, res) => {
+
+  const rows = await dbAll(
+    `SELECT * FROM accounts WHERE user_id=?`,
+    [req.user.id]
+  );
+
+  res.json(rows);
+
+});
+
+app.post("/finance/accounts", auth, async (req, res) => {
+
+  const { type, description, value, due_date } = req.body;
+
+  await dbRun(
+    `INSERT INTO accounts(user_id,type,description,value,due_date)
+     VALUES(?,?,?,?,?)`,
+    [req.user.id, type, description, value, due_date]
+  );
+
+  res.json({ success: true });
+
+});
+
+// =======================================================================
+// PRODUTOS
+// =======================================================================
+
+app.get("/products", auth, async (req, res) => {
+
+  const rows = await dbAll(
+    `SELECT * FROM products WHERE user_id=?`,
+    [req.user.id]
+  );
+
+  res.json(rows);
+
+});
+
+app.post("/products", auth, async (req, res) => {
+
+  const { name, sku, cost, price, quantity } = req.body;
+
+  await dbRun(
+    `INSERT INTO products(user_id,name,sku,cost,price,quantity)
+     VALUES(?,?,?,?,?,?)`,
+    [req.user.id, name, sku, cost, price, quantity]
+  );
+
+  res.json({ success: true });
+
+});
+
+// =======================================================================
+// IA GROQ
+// =======================================================================
+
+app.post("/ai/analyze", auth, async (req, res) => {
+
+  try {
+
+    const accounts = await dbAll(
+      `SELECT * FROM accounts WHERE user_id=?`,
+      [req.user.id]
+    );
+
+    const totalReceber = accounts
+      .filter(a => a.type === "receber")
+      .reduce((s, a) => s + a.value, 0);
+
+    const totalPagar = accounts
+      .filter(a => a.type === "pagar")
+      .reduce((s, a) => s + a.value, 0);
+
+    const prompt = `
+Receitas: ${totalReceber}
+Despesas: ${totalPagar}
+
+Analise os dados e dê recomendações financeiras.
+`;
+
+    const response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "llama3-70b-8192",
+          messages: [
+            { role: "system", content: "Consultor financeiro empresarial." },
+            { role: "user", content: prompt }
+          ]
+        })
       }
+    );
 
-      res.json({ status: sub.status });
-    }
-  );
+    const data = await response.json();
+
+    res.json({
+      analysis: data.choices?.[0]?.message?.content || "Sem análise"
+    });
+
+  } catch {
+
+    res.status(500).json({ error: "Erro IA" });
+
+  }
+
 });
 
 // =======================================================================
-// CRIAR PIX
+// PIX ASSINATURA
 // =======================================================================
 
 app.post("/subscription/create", auth, async (req, res) => {
+
   try {
+
     const result = await payment.create({
       body: {
         transaction_amount: PLAN_PRICE,
         description: "Assinatura Aldra",
         payment_method_id: "pix",
-        payer: { email: req.user.email },
-      },
+        payer: { email: req.user.email }
+      }
     });
 
-    db.run(
-      `UPDATE subscriptions SET payment_id=?, status='pending' WHERE user_id=?`,
+    await dbRun(
+      `UPDATE subscriptions
+       SET payment_id=?, status='pending'
+       WHERE user_id=?`,
       [result.id, req.user.id]
     );
 
     res.json(result);
-  } catch (err) {
-    console.error("Erro PIX:", err);
-    res.status(500).json({ error: "Erro ao gerar PIX" });
+
+  } catch {
+
+    res.status(500).json({ error: "Erro PIX" });
+
   }
+
 });
 
 // =======================================================================
-// WEBHOOK MERCADO PAGO
+// WEBHOOK
 // =======================================================================
 
-app.post("/webhook", async (req, res) => {
+app.post("/webhook/mercadopago", async (req, res) => {
+
   try {
-    if (req.body.type !== "payment") return res.sendStatus(200);
 
-    const paymentId = req.body.data.id;
-    const paymentInfo = await payment.get({ id: paymentId });
+    const paymentId = req.body?.data?.id;
 
-    if (paymentInfo.status === "approved") {
-      db.run(
-        `UPDATE subscriptions 
-         SET status='active',
-             expires_at=datetime('now','+30 day')
+    if (!paymentId)
+      return res.sendStatus(200);
+
+    const paymentData = await payment.get({ id: paymentId });
+
+    if (paymentData.status === "approved") {
+
+      await dbRun(
+        `UPDATE subscriptions
+         SET status='active'
          WHERE payment_id=?`,
         [paymentId]
       );
-    }
 
-    if (paymentInfo.status === "rejected") {
-      db.run(
-        `UPDATE subscriptions 
-         SET status='pending',
-             payment_id=NULL
-         WHERE payment_id=?`,
-        [paymentId]
-      );
     }
 
     res.sendStatus(200);
-  } catch (err) {
-    console.error("Erro webhook:", err);
+
+  } catch {
+
     res.sendStatus(500);
+
   }
+
 });
 
 // =======================================================================
 // ADMIN
 // =======================================================================
 
-app.get("/admin/metrics", auth, adminOnly, (req, res) => {
-  db.get(`SELECT COUNT(*) as total FROM users`, (_, totalUsers) => {
-    db.get(
-      `SELECT COUNT(*) as active FROM subscriptions WHERE status='active'`,
-      (_, activeUsers) => {
-        db.get(
-          `SELECT COUNT(*) as pending FROM subscriptions WHERE status='pending'`,
-          (_, pendingUsers) => {
-            const receita = (activeUsers?.active || 0) * PLAN_PRICE;
+app.get("/admin/stats", auth, adminOnly, async (req, res) => {
 
-            res.json({
-              totalUsers: totalUsers?.total || 0,
-              activeSubscriptions: activeUsers?.active || 0,
-              pendingPayments: pendingUsers?.pending || 0,
-              monthlyRevenue: receita,
-            });
-          }
-        );
-      }
-    );
+  const users = await dbGet(`SELECT COUNT(*) as total FROM users`);
+
+  const subs = await dbGet(
+    `SELECT COUNT(*) as active FROM subscriptions WHERE status='active'`
+  );
+
+  res.json({
+    users: users.total,
+    active_subscriptions: subs.active
   });
-});
 
-app.get("/admin/users", auth, adminOnly, (req, res) => {
-  db.all(
-    `
-    SELECT 
-      u.id,
-      u.name,
-      u.email,
-      s.status as subscription_status,
-      s.payment_id,
-      s.expires_at
-    FROM users u
-    LEFT JOIN subscriptions s ON u.id=s.user_id
-    `,
-    (_, rows) => res.json(rows)
-  );
-});
-
-app.post("/admin/approve/:id", auth, adminOnly, (req, res) => {
-  db.run(
-    `
-    UPDATE subscriptions
-    SET status='active',
-        expires_at=datetime('now','+30 day')
-    WHERE user_id=?
-    `,
-    [req.params.id],
-    () => res.json({ success: true })
-  );
-});
-
-app.post("/admin/cancel/:id", auth, adminOnly, (req, res) => {
-  db.run(
-    `
-    UPDATE subscriptions
-    SET status='pending',
-        payment_id=NULL,
-        expires_at=NULL
-    WHERE user_id=?
-    `,
-    [req.params.id],
-    () => res.json({ success: true })
-  );
 });
 
 // =======================================================================
@@ -405,5 +537,5 @@ app.get("/*", (_, res) =>
 // =======================================================================
 
 app.listen(PORT, () =>
-  console.log(`🚀 Aldra ONLINE na porta ${PORT}`)
+  console.log(`🚀 Aldra ERP rodando na porta ${PORT}`)
 );

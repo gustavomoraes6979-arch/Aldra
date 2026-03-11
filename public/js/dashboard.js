@@ -1,200 +1,504 @@
 // ==========================================
-// dashboard.js — CLIENTE (VERSÃO FINAL SEGURA)
+// dashboard.js — CLIENTE (ERP ALDRA COMPLETO)
 // ==========================================
 
-console.log("🚀 Dashboard CLIENTE carregado");
+console.log("🚀 Dashboard Aldra carregado");
 
 (function () {
 
-  const token = localStorage.getItem("token");
+const token = localStorage.getItem("token");
 
-  if (!token) {
-    window.location.href = "/";
-    return;
-  }
+if (!token) {
+window.location.href = "/";
+return;
+}
 
-  const alertBox = document.getElementById("alert");
-  const pixBox = document.getElementById("pixBox");
-  const pixQr = document.getElementById("qrImage");
-  const pixCopiaCola = document.getElementById("pixCode");
-  const crmLista = document.getElementById("crmLista");
+const alertBox = document.getElementById("alert");
+const pixBox = document.getElementById("pixBox");
+const pixQr = document.getElementById("qrImage");
+const pixCopiaCola = document.getElementById("pixCode");
 
-  let subscriptionActive = false;
+const crmLista = document.getElementById("crmLista");
+const estoqueLista = document.getElementById("estoqueLista");
+const financeiroLista = document.getElementById("financeiroLista");
 
-  async function safeJson(res) {
-    try {
-      const text = await res.text();
-      if (!text || text.trim().startsWith("<")) return {};
-      return JSON.parse(text);
-    } catch {
-      return {};
-    }
-  }
+const chatInput = document.getElementById("chatInput");
+const chatBox = document.getElementById("chatBox");
 
-  function showAlert() {
-    subscriptionActive = false;
-    alertBox.style.display = "block";
-  }
+let subscriptionActive = false;
 
-  function hideAlert() {
-    subscriptionActive = true;
-    alertBox.style.display = "none";
-    pixBox.style.display = "none";
-  }
+// ==========================================
+// SAFE JSON
+// ==========================================
 
-  function renderPix(data) {
+async function safeJson(res) {
 
-    const pixData =
-      data?.point_of_interaction?.transaction_data ||
-      data?.transaction_data;
+try {
 
-    if (!pixData) {
-      alert("Erro ao gerar PIX.");
-      return;
-    }
+const text = await res.text();
 
-    if (pixData.qr_code_base64) {
-      pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
-    }
+if (!text || text.trim().startsWith("<"))
+return {};
 
-    if (pixData.qr_code) {
-      pixCopiaCola.value = pixData.qr_code;
-    }
+return JSON.parse(text);
 
-    pixBox.style.display = "block";
-  }
+} catch {
 
-  // 🔥 AGORA VALIDA PELO BANCO USANDO /auth/me
-  async function checkSubscription() {
+return {};
 
-    try {
+}
 
-      const res = await fetch("/auth/me", {
-        headers: { Authorization: "Bearer " + token }
-      });
+}
 
-      if (!res.ok) {
-        showAlert();
-        return;
-      }
+// ==========================================
+// ALERTA ASSINATURA
+// ==========================================
 
-      const data = await safeJson(res);
+function showAlert() {
 
-      console.log("Status real do banco:", data);
+subscriptionActive = false;
 
-      if (data.subscription_status === "active") {
-        hideAlert();
-      } else {
-        showAlert();
-      }
+if (alertBox)
+alertBox.style.display = "block";
 
-    } catch (err) {
-      console.error(err);
-      showAlert();
-    }
-  }
+}
 
-  window.ativarPlano = async function () {
+function hideAlert() {
 
-    try {
+subscriptionActive = true;
 
-      pixBox.style.display = "none";
+if (alertBox)
+alertBox.style.display = "none";
 
-      const res = await fetch("/subscription/create", {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + token
-        }
-      });
+if (pixBox)
+pixBox.style.display = "none";
 
-      if (!res.ok) {
-        alert("Erro ao criar pagamento.");
-        return;
-      }
+}
 
-      const data = await safeJson(res);
+// ==========================================
+// RENDER PIX
+// ==========================================
 
-      renderPix(data);
+function renderPix(data) {
 
-    } catch (err) {
-      console.error(err);
-      alert("Erro ao criar pagamento.");
-    }
-  };
+const pixData =
+data?.point_of_interaction?.transaction_data ||
+data?.transaction_data;
 
-  const sections = [
-    "sectionPDF",
-    "sectionContrato",
-    "sectionCobranca",
-    "sectionRelatorios",
-    "sectionChat",
-    "sectionCRM"
-  ];
+if (!pixData) {
+alert("Erro ao gerar PIX.");
+return;
+}
 
-  function hideAllSections() {
-    sections.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.classList.remove("active");
-    });
-  }
+if (pixData.qr_code_base64 && pixQr)
+pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
 
-  function showSection(name) {
+if (pixData.qr_code && pixCopiaCola)
+pixCopiaCola.value = pixData.qr_code;
 
-    if (!subscriptionActive) {
-      alert("Sua assinatura está inativa.");
-      return;
-    }
+if (pixBox)
+pixBox.style.display = "block";
 
-    hideAllSections();
+}
 
-    const el = document.getElementById("section" + name);
-    if (el) el.classList.add("active");
+// ==========================================
+// VERIFICAR ASSINATURA
+// ==========================================
 
-    if (name === "CRM") loadClients();
-  }
+async function checkSubscription() {
 
-  window.showSection = showSection;
+try {
 
-  async function loadClients() {
-    try {
-      const res = await fetch("/api/crm", {
-        headers: { Authorization: "Bearer " + token }
-      });
+const res = await fetch("/auth/me", {
+headers: {
+Authorization: "Bearer " + token
+}
+});
 
-      if (!res.ok) return;
+if (!res.ok) {
+showAlert();
+return;
+}
 
-      const data = await safeJson(res);
+const data = await safeJson(res);
 
-      if (!crmLista || !Array.isArray(data)) return;
+if (data.subscription_status === "active") {
 
-      crmLista.innerHTML = "";
+hideAlert();
 
-      data.forEach(client => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${client.name}</td>
-          <td>${client.email}</td>
-          <td>${client.phone || ""}</td>
-        `;
-        crmLista.appendChild(row);
-      });
+} else {
 
-    } catch (err) {
-      console.error(err);
-    }
-  }
+showAlert();
 
-  window.logout = function () {
-    localStorage.removeItem("token");
-    window.location.href = "/";
-  };
+}
 
-  async function init() {
-    await checkSubscription();
-    setInterval(checkSubscription, 5000); // atualiza automático após pagar
-    showSection("PDF");
-  }
+} catch (err) {
 
-  init();
+console.error(err);
+showAlert();
+
+}
+
+}
+
+// ==========================================
+// CRIAR PIX
+// ==========================================
+
+window.ativarPlano = async function () {
+
+try {
+
+if (pixBox)
+pixBox.style.display = "none";
+
+const res = await fetch("/subscription/create", {
+method: "POST",
+headers: {
+Authorization: "Bearer " + token
+}
+});
+
+if (!res.ok) {
+alert("Erro ao criar pagamento.");
+return;
+}
+
+const data = await safeJson(res);
+
+renderPix(data);
+
+} catch (err) {
+
+console.error(err);
+alert("Erro ao criar pagamento.");
+
+}
+
+};
+
+// ==========================================
+// SEÇÕES
+// ==========================================
+
+const sections = [
+
+"sectionPDF",
+"sectionContrato",
+"sectionCobranca",
+"sectionRelatorios",
+"sectionChat",
+"sectionCRM",
+"sectionEstoque",
+"sectionFinanceiro",
+"sectionFiscal",
+"sectionCertidoes",
+"sectionAdmin"
+
+];
+
+function hideAllSections() {
+
+sections.forEach(id => {
+
+const el = document.getElementById(id);
+
+if (el)
+el.classList.remove("active");
+
+});
+
+}
+
+// ==========================================
+// MOSTRAR SEÇÃO
+// ==========================================
+
+function showSection(name) {
+
+if (!subscriptionActive) {
+
+alert("⚠️ Sua assinatura está inativa.");
+return;
+
+}
+
+hideAllSections();
+
+const el = document.getElementById("section" + name);
+
+if (el)
+el.classList.add("active");
+
+if (name === "CRM") loadClients();
+if (name === "Estoque") loadProdutos();
+if (name === "Financeiro") loadFinanceiro();
+
+}
+
+window.showSection = showSection;
+
+// ==========================================
+// CRM
+// ==========================================
+
+async function loadClients() {
+
+try {
+
+const res = await fetch("/crm", {
+headers: {
+Authorization: "Bearer " + token
+}
+});
+
+const data = await safeJson(res);
+
+if (!crmLista || !Array.isArray(data))
+return;
+
+crmLista.innerHTML = "";
+
+data.forEach(client => {
+
+const row = document.createElement("tr");
+
+row.innerHTML = `
+<td>${client.name || ""}</td>
+<td>${client.email || ""}</td>
+<td>${client.phone || ""}</td>
+`;
+
+crmLista.appendChild(row);
+
+});
+
+} catch (err) {
+
+console.error("Erro CRM:", err);
+
+}
+
+}
+
+// ==========================================
+// SALVAR CLIENTE
+// ==========================================
+
+window.salvarCliente = async function () {
+
+const nome = document.getElementById("crmNome").value;
+const email = document.getElementById("crmEmail").value;
+const telefone = document.getElementById("crmTelefone").value;
+
+if (!nome)
+return alert("Informe o nome.");
+
+try {
+
+await fetch("/crm", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+Authorization: "Bearer " + token
+},
+body: JSON.stringify({
+name: nome,
+email,
+phone: telefone
+})
+});
+
+loadClients();
+
+} catch (err) {
+
+console.error(err);
+
+}
+
+};
+
+// ==========================================
+// ESTOQUE
+// ==========================================
+
+async function loadProdutos() {
+
+try {
+
+const res = await fetch("/products", {
+headers: {
+Authorization: "Bearer " + token
+}
+});
+
+const data = await safeJson(res);
+
+if (!estoqueLista)
+return;
+
+estoqueLista.innerHTML = "";
+
+data.forEach(p => {
+
+const row = document.createElement("tr");
+
+row.innerHTML = `
+<td>${p.name}</td>
+<td>${p.sku}</td>
+<td>${p.quantity}</td>
+<td>${p.price}</td>
+`;
+
+estoqueLista.appendChild(row);
+
+});
+
+} catch (err) {
+
+console.error(err);
+
+}
+
+}
+
+// ==========================================
+// FINANCEIRO
+// ==========================================
+
+async function loadFinanceiro() {
+
+try {
+
+const res = await fetch("/finance/accounts", {
+headers: {
+Authorization: "Bearer " + token
+}
+});
+
+const data = await safeJson(res);
+
+if (!financeiroLista)
+return;
+
+financeiroLista.innerHTML = "";
+
+data.forEach(conta => {
+
+const row = document.createElement("tr");
+
+row.innerHTML = `
+<td>${conta.description}</td>
+<td>${conta.type}</td>
+<td>${conta.value}</td>
+<td>${conta.status}</td>
+`;
+
+financeiroLista.appendChild(row);
+
+});
+
+} catch (err) {
+
+console.error(err);
+
+}
+
+}
+
+// ==========================================
+// CHAT IA
+// ==========================================
+
+window.enviarMensagemIA = async function () {
+
+const msg = chatInput.value;
+
+if (!msg) return;
+
+chatBox.innerHTML += `<div><b>Você:</b> ${msg}</div>`;
+
+chatInput.value = "";
+
+try {
+
+const res = await fetch("/ai/chat", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+Authorization: "Bearer " + token
+},
+body: JSON.stringify({ message: msg })
+});
+
+const data = await safeJson(res);
+
+chatBox.innerHTML += `<div><b>IA:</b> ${data.reply}</div>`;
+
+chatBox.scrollTop = chatBox.scrollHeight;
+
+} catch (err) {
+
+console.error(err);
+
+}
+
+};
+
+// ==========================================
+// IA ANALISE
+// ==========================================
+
+window.analisarEmpresa = async function () {
+
+try {
+
+const res = await fetch("/ai/analyze", {
+method: "POST",
+headers: {
+Authorization: "Bearer " + token
+}
+});
+
+const data = await safeJson(res);
+
+alert(data.analysis || "Sem análise");
+
+} catch {
+
+alert("Erro ao analisar empresa");
+
+}
+
+};
+
+// ==========================================
+// LOGOUT
+// ==========================================
+
+window.logout = function () {
+
+localStorage.removeItem("token");
+
+window.location.href = "/";
+
+};
+
+// ==========================================
+// INIT
+// ==========================================
+
+async function init() {
+
+await checkSubscription();
+
+setInterval(checkSubscription, 5000);
+
+showSection("PDF");
+
+}
+
+init();
 
 })();

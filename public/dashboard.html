@@ -1,220 +1,313 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head>
-<meta charset="UTF-8" />
-<title>Aldra — Dashboard</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<!-- 🔥 FORÇA NÃO USAR CACHE -->
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-<meta http-equiv="Pragma" content="no-cache" />
-<meta http-equiv="Expires" content="0" />
+<head>
+
+<meta charset="UTF-8">
+<title>Aldra — Dashboard</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 
 <style>
+
 :root{
-  --azul-escuro:#053F6B;
-  --azul:#0A6CBD;
-  --verde:#3BB273;
-  --bg:#F4F7FA;
-  --borda:#DCE2E8;
-  --white:#fff;
-  --radius:14px;
-  --shadow:0 10px 25px rgba(0,0,0,.06);
+--azul-escuro:#053F6B;
+--azul:#0A6CBD;
+--verde:#3BB273;
+--bg:#F4F7FA;
+--borda:#DCE2E8;
+--white:#fff;
+--radius:14px;
+--shadow:0 10px 25px rgba(0,0,0,.06);
 }
 
 body{
-  margin:0;
-  background:var(--bg);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
+margin:0;
+background:var(--bg);
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
 }
 
+/* HEADER */
+
 header{
-  background:var(--white);
-  padding:18px 32px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  border-bottom:1px solid var(--borda);
-  box-shadow:var(--shadow);
+background:var(--white);
+padding:18px 32px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+border-bottom:1px solid var(--borda);
+box-shadow:var(--shadow);
 }
 
 header h1{
-  margin:0;
-  font-size:20px;
-  color:var(--azul-escuro);
+margin:0;
+font-size:20px;
+color:var(--azul-escuro);
 }
 
+/* HEADER ACTIONS */
+
 .header-actions{
-  display:flex;
-  gap:10px;
+display:flex;
+gap:10px;
 }
 
 button{
-  border:none;
-  border-radius:var(--radius);
-  padding:10px 16px;
-  font-weight:600;
-  cursor:pointer;
+border:none;
+border-radius:var(--radius);
+padding:10px 16px;
+font-weight:600;
+cursor:pointer;
 }
 
 .btn-admin{
-  background:#111;
-  color:#fff;
+background:#111;
+color:#fff;
 }
 
 .btn-logout{
-  background:#e74c3c;
-  color:white;
+background:#e74c3c;
+color:white;
 }
 
+/* ALERTA */
+
 .alert{
-  background:#fff3cd;
-  color:#856404;
-  border:1px solid #ffeeba;
-  margin:25px;
-  padding:24px;
-  border-radius:var(--radius);
-  font-weight:600;
-  display:none;
+background:#fff3cd;
+color:#856404;
+border:1px solid #ffeeba;
+margin:25px;
+padding:24px;
+border-radius:var(--radius);
+font-weight:600;
+display:none;
 }
 
 .action{
-  background:var(--verde);
-  color:white;
-  padding:12px 22px;
-  margin-top:15px;
+background:var(--verde);
+color:white;
+padding:12px 22px;
+margin-top:15px;
 }
 
+/* MENU */
+
 .menu{
-  display:flex;
-  flex-wrap:wrap;
-  gap:14px;
-  padding:18px 28px;
-  background:var(--white);
-  border-bottom:1px solid var(--borda);
+display:flex;
+flex-wrap:wrap;
+gap:12px;
+padding:18px 28px;
+background:var(--white);
+border-bottom:1px solid var(--borda);
 }
 
 .menu button{
-  background:var(--azul);
-  color:white;
+background:var(--azul);
+color:white;
 }
 
+/* SECTIONS */
+
 .section{
-  background:var(--white);
-  margin:30px;
-  padding:30px;
-  border-radius:var(--radius);
-  border:1px solid var(--borda);
-  box-shadow:var(--shadow);
-  display:none;
+background:var(--white);
+margin:30px;
+padding:30px;
+border-radius:var(--radius);
+border:1px solid var(--borda);
+box-shadow:var(--shadow);
+display:none;
 }
 
 .section.active{
-  display:block;
+display:block;
 }
 
-input, textarea{
-  width:100%;
-  padding:12px;
-  margin-top:10px;
-  border-radius:var(--radius);
-  border:1px solid var(--borda);
+/* INPUTS */
+
+input,textarea{
+width:100%;
+padding:12px;
+margin-top:10px;
+border-radius:var(--radius);
+border:1px solid var(--borda);
 }
+
+/* TABLE */
 
 table{
-  width:100%;
-  border-collapse:collapse;
-  margin-top:20px;
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
 }
 
 th,td{
-  padding:12px;
-  border-bottom:1px solid var(--borda);
+padding:12px;
+border-bottom:1px solid var(--borda);
 }
 
 th{
-  background:#f1f4f8;
+background:#f1f4f8;
 }
 
-/* 🔥 PIX */
+/* PIX */
+
 .pix-box{
-  margin-top:20px;
-  background:white;
-  padding:20px;
-  border-radius:var(--radius);
-  border:1px solid var(--borda);
-  display:none;
-  text-align:center;
+margin-top:20px;
+background:white;
+padding:20px;
+border-radius:var(--radius);
+border:1px solid var(--borda);
+display:none;
+text-align:center;
 }
 
 .pix-box img{
-  width:220px;
-  margin-top:10px;
+width:220px;
+margin-top:10px;
 }
+
+/* TITLES */
+
+.section h2{
+margin-top:0;
+color:var(--azul-escuro);
+}
+
 </style>
+
 </head>
 
 <body>
 
 <header>
-  <h1>🚀 Aldra — Plataforma Administrativa</h1>
-  <div class="header-actions">
 
-    <button class="btn-admin" onclick="window.location.href='/admin-auth.html'">
-      🔐 Admin
-    </button>
+<h1>🚀 Aldra — Plataforma Administrativa</h1>
 
-    <button class="btn-logout" onclick="logout()">Sair</button>
-  </div>
+<div class="header-actions">
+
+<button class="btn-admin" onclick="window.location.href='/admin-dashboard.html'">
+🔐 Admin
+</button>
+
+<button class="btn-logout" onclick="logout()">
+Sair
+</button>
+
+</div>
+
 </header>
 
 <!-- ALERTA ASSINATURA -->
+
 <div id="alert" class="alert">
-  <div id="alertText">
-    ⚠️ Sua assinatura não está ativa.
-  </div>
 
-  <button id="btnAssinar" class="action" onclick="ativarPlano()">
-    Assinar Plano Mensal — R$ 70,00
-  </button>
+<div id="alertText">
+⚠️ Sua assinatura não está ativa.
+</div>
 
-  <!-- PIX -->
-  <div class="pix-box" id="pixBox">
-    <h3>📲 Escaneie o QR Code</h3>
+<button id="btnAssinar" class="action" onclick="ativarPlano()">
+Assinar Plano de Lançamento — R$ 1,00
+</button>
 
-    <img id="qrImage" alt="QR Code PIX" />
+<div class="pix-box" id="pixBox">
 
-    <p><strong>Copia e Cola:</strong></p>
-    <textarea id="pixCode" readonly placeholder="Código PIX aparecerá aqui"></textarea>
-  </div>
+<h3>📲 Escaneie o QR Code</h3>
+
+<img id="qrImage" alt="QR Code PIX">
+
+<p><strong>Copia e Cola:</strong></p>
+
+<textarea id="pixCode" readonly placeholder="Código PIX aparecerá aqui"></textarea>
+
+</div>
+
 </div>
 
 <!-- MENU -->
-<div class="menu" id="menu">
-  <button onclick="showSection('PDF')">📄 PDF</button>
-  <button onclick="showSection('Contrato')">📝 Contrato</button>
-  <button onclick="showSection('Cobranca')">💳 Cobrança</button>
-  <button onclick="showSection('Relatorios')">📊 Relatórios</button>
-  <button onclick="showSection('Chat')">💬 Chat IA</button>
-  <button onclick="showSection('CRM')">👥 CRM</button>
+
+<div class="menu">
+
+<button onclick="showSection('PDF')">📄 PDF</button>
+
+<button onclick="showSection('Contrato')">📝 Contrato</button>
+
+<button onclick="showSection('Cobranca')">💳 Cobrança</button>
+
+<button onclick="showSection('Relatorios')">📊 Relatórios</button>
+
+<button onclick="showSection('Chat')">💬 IA</button>
+
+<button onclick="showSection('CRM')">👥 CRM</button>
+
+<button onclick="showSection('Estoque')">📦 Estoque</button>
+
+<button onclick="showSection('Financeiro')">💰 Financeiro</button>
+
+<button onclick="showSection('Fiscal')">📑 Fiscal</button>
+
+<button onclick="showSection('Certidoes')">📜 Certidões</button>
+
+<button onclick="showSection('Admin')">🏢 Administrativo</button>
+
 </div>
 
-<!-- SEÇÕES -->
-<div id="sectionPDF" class="section active"><h2>📄 Análise de PDF</h2></div>
-<div id="sectionContrato" class="section"><h2>📝 Gerador de Contratos</h2></div>
-<div id="sectionCobranca" class="section"><h2>💳 Cobrança</h2></div>
-<div id="sectionRelatorios" class="section"><h2>📊 Relatórios</h2></div>
-<div id="sectionChat" class="section"><h2>💬 Chat IA</h2></div>
+<!-- PDF -->
+
+<div id="sectionPDF" class="section active">
+<h2>📄 Análise de PDF</h2>
+<p>Envie documentos para análise automática com IA.</p>
+</div>
+
+<!-- CONTRATOS -->
+
+<div id="sectionContrato" class="section">
+<h2>📝 Gerador de Contratos</h2>
+<p>Criação automática de contratos empresariais.</p>
+</div>
+
+<!-- COBRANÇA -->
+
+<div id="sectionCobranca" class="section">
+<h2>💳 Sistema de Cobrança</h2>
+<p>Envie cobranças via PIX e controle pagamentos.</p>
+</div>
+
+<!-- RELATÓRIOS -->
+
+<div id="sectionRelatorios" class="section">
+<h2>📊 Relatórios</h2>
+<p>Relatórios financeiros e administrativos.</p>
+</div>
+
+<!-- IA -->
+
+<div id="sectionChat" class="section">
+<h2>💬 Assistente IA da Aldra</h2>
+<p>A IA ajuda na gestão administrativa, financeira e atendimento.</p>
+</div>
+
+<!-- CRM -->
 
 <div id="sectionCRM" class="section">
+
 <h2>👥 CRM</h2>
 
-<input id="crmNome" placeholder="Nome do cliente" />
-<input id="crmEmail" placeholder="Email do cliente" />
-<input id="crmTelefone" placeholder="Telefone" />
-<button class="action" onclick="salvarCliente()">Salvar Cliente</button>
+<input id="crmNome" placeholder="Nome do cliente">
+
+<input id="crmEmail" placeholder="Email do cliente">
+
+<input id="crmTelefone" placeholder="Telefone">
+
+<button class="action" onclick="salvarCliente()">
+Salvar Cliente
+</button>
 
 <table>
+
 <thead>
 <tr>
 <th>Nome</th>
@@ -222,12 +315,49 @@ th{
 <th>Telefone</th>
 </tr>
 </thead>
+
 <tbody id="crmLista"></tbody>
+
 </table>
+
 </div>
 
-<!-- 🔥 SCRIPT COM CACHE BUSTING -->
-<script src="/js/dashboard.js?v=3"></script>
+<!-- ESTOQUE -->
+
+<div id="sectionEstoque" class="section">
+<h2>📦 Controle de Estoque</h2>
+<p>Gestão de produtos, entrada e saída de mercadorias.</p>
+</div>
+
+<!-- FINANCEIRO -->
+
+<div id="sectionFinanceiro" class="section">
+<h2>💰 Financeiro</h2>
+<p>Contas a pagar, contas a receber e fluxo de caixa.</p>
+</div>
+
+<!-- FISCAL -->
+
+<div id="sectionFiscal" class="section">
+<h2>📑 Gestão Fiscal</h2>
+<p>Apuração de impostos e obrigações fiscais.</p>
+</div>
+
+<!-- CERTIDÕES -->
+
+<div id="sectionCertidoes" class="section">
+<h2>📜 Certidões</h2>
+<p>Controle de validade de certidões da empresa.</p>
+</div>
+
+<!-- ADMIN -->
+
+<div id="sectionAdmin" class="section">
+<h2>🏢 Administrativo</h2>
+<p>Gestão interna, documentos e tarefas.</p>
+</div>
+
+<script src="/js/dashboard.js?v=5"></script>
 
 </body>
 </html>
