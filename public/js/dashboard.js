@@ -1,3 +1,4 @@
+```javascript
 // ==========================================
 // dashboard.js — CLIENTE (ERP ALDRA COMPLETO)
 // ==========================================
@@ -25,7 +26,11 @@ const financeiroLista = document.getElementById("financeiroLista");
 const chatInput = document.getElementById("chatInput");
 const chatBox = document.getElementById("chatBox");
 
+const adminBtn = document.getElementById("adminBtn");
+
 let subscriptionActive = false;
+let isAdmin = false;
+
 
 // ==========================================
 // SAFE JSON
@@ -49,6 +54,43 @@ return {};
 }
 
 }
+
+
+// ==========================================
+// VERIFICAR USUÁRIO (ADMIN)
+// ==========================================
+
+async function checkUser() {
+
+try {
+
+const res = await fetch("/auth/me", {
+headers: {
+Authorization: "Bearer " + token
+}
+});
+
+const data = await safeJson(res);
+
+console.log("Usuário:", data.email);
+
+if (data.is_admin) {
+
+isAdmin = true;
+
+if (adminBtn)
+adminBtn.style.display = "inline-block";
+
+}
+
+} catch (err) {
+
+console.error("Erro ao verificar usuário:", err);
+
+}
+
+}
+
 
 // ==========================================
 // ALERTA ASSINATURA
@@ -77,6 +119,7 @@ console.log("✅ Assinatura ativa");
 
 }
 
+
 // ==========================================
 // RENDER PIX
 // ==========================================
@@ -102,6 +145,7 @@ if (pixBox)
 pixBox.style.display = "block";
 
 }
+
 
 // ==========================================
 // VERIFICAR ASSINATURA
@@ -145,6 +189,7 @@ showAlert();
 
 }
 
+
 // ==========================================
 // CRIAR PIX
 // ==========================================
@@ -181,6 +226,7 @@ alert("Erro ao criar pagamento.");
 
 };
 
+
 // ==========================================
 // SEÇÕES
 // ==========================================
@@ -214,6 +260,7 @@ el.classList.remove("active");
 
 }
 
+
 // ==========================================
 // MOSTRAR SEÇÃO
 // ==========================================
@@ -223,6 +270,13 @@ function showSection(name) {
 if (!subscriptionActive) {
 
 alert("⚠️ Sua assinatura está inativa.");
+return;
+
+}
+
+if (name === "Admin" && !isAdmin) {
+
+alert("🚫 Acesso restrito ao administrador.");
 return;
 
 }
@@ -241,6 +295,7 @@ if (name === "Financeiro") loadFinanceiro();
 }
 
 window.showSection = showSection;
+
 
 // ==========================================
 // CRM
@@ -285,6 +340,7 @@ console.error("Erro CRM:", err);
 
 }
 
+
 // ==========================================
 // SALVAR CLIENTE
 // ==========================================
@@ -322,6 +378,7 @@ console.error(err);
 }
 
 };
+
 
 // ==========================================
 // ESTOQUE
@@ -367,6 +424,7 @@ console.error(err);
 
 }
 
+
 // ==========================================
 // FINANCEIRO
 // ==========================================
@@ -411,71 +469,6 @@ console.error(err);
 
 }
 
-// ==========================================
-// CHAT IA
-// ==========================================
-
-window.enviarMensagemIA = async function () {
-
-const msg = chatInput.value;
-
-if (!msg) return;
-
-chatBox.innerHTML += `<div><b>Você:</b> ${msg}</div>`;
-
-chatInput.value = "";
-
-try {
-
-const res = await fetch("/ai/chat", {
-method: "POST",
-headers: {
-"Content-Type": "application/json",
-Authorization: "Bearer " + token
-},
-body: JSON.stringify({ message: msg })
-});
-
-const data = await safeJson(res);
-
-chatBox.innerHTML += `<div><b>IA:</b> ${data.reply}</div>`;
-
-chatBox.scrollTop = chatBox.scrollHeight;
-
-} catch (err) {
-
-console.error(err);
-
-}
-
-};
-
-// ==========================================
-// IA ANALISE
-// ==========================================
-
-window.analisarEmpresa = async function () {
-
-try {
-
-const res = await fetch("/ai/analyze", {
-method: "POST",
-headers: {
-Authorization: "Bearer " + token
-}
-});
-
-const data = await safeJson(res);
-
-alert(data.analysis || "Sem análise");
-
-} catch {
-
-alert("Erro ao analisar empresa");
-
-}
-
-};
 
 // ==========================================
 // LOGOUT
@@ -489,15 +482,17 @@ window.location.href = "/";
 
 };
 
+
 // ==========================================
 // INIT
 // ==========================================
 
 async function init() {
 
+await checkUser(); // VERIFICA ADMIN
+
 await checkSubscription();
 
-/* verifica pagamento automaticamente */
 setInterval(checkSubscription, 4000);
 
 showSection("PDF");
@@ -507,3 +502,4 @@ showSection("PDF");
 init();
 
 })();
+```

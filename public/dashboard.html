@@ -67,6 +67,7 @@ cursor:pointer;
 .btn-admin{
 background:#111;
 color:#fff;
+display:none; /* ESCONDIDO POR PADRÃO */
 }
 
 .btn-logout{
@@ -189,7 +190,7 @@ color:var(--azul-escuro);
 
 <div class="header-actions">
 
-<button class="btn-admin" onclick="window.location.href='/admin-dashboard.html'">
+<button id="adminBtn" class="btn-admin" onclick="window.location.href='/admin-dashboard.html'">
 🔐 Admin
 </button>
 
@@ -232,74 +233,52 @@ Assinar Plano de Lançamento — R$ 1,00
 <div class="menu">
 
 <button onclick="showSection('PDF')">📄 PDF</button>
-
 <button onclick="showSection('Contrato')">📝 Contrato</button>
-
 <button onclick="showSection('Cobranca')">💳 Cobrança</button>
-
 <button onclick="showSection('Relatorios')">📊 Relatórios</button>
-
 <button onclick="showSection('Chat')">💬 IA</button>
-
 <button onclick="showSection('CRM')">👥 CRM</button>
-
 <button onclick="showSection('Estoque')">📦 Estoque</button>
-
 <button onclick="showSection('Financeiro')">💰 Financeiro</button>
-
 <button onclick="showSection('Fiscal')">📑 Fiscal</button>
-
 <button onclick="showSection('Certidoes')">📜 Certidões</button>
-
 <button onclick="showSection('Admin')">🏢 Administrativo</button>
 
 </div>
 
-<!-- PDF -->
+<!-- SECTIONS -->
 
 <div id="sectionPDF" class="section active">
 <h2>📄 Análise de PDF</h2>
 <p>Envie documentos para análise automática com IA.</p>
 </div>
 
-<!-- CONTRATOS -->
-
 <div id="sectionContrato" class="section">
 <h2>📝 Gerador de Contratos</h2>
 <p>Criação automática de contratos empresariais.</p>
 </div>
-
-<!-- COBRANÇA -->
 
 <div id="sectionCobranca" class="section">
 <h2>💳 Sistema de Cobrança</h2>
 <p>Envie cobranças via PIX e controle pagamentos.</p>
 </div>
 
-<!-- RELATÓRIOS -->
-
 <div id="sectionRelatorios" class="section">
 <h2>📊 Relatórios</h2>
 <p>Relatórios financeiros e administrativos.</p>
 </div>
-
-<!-- IA -->
 
 <div id="sectionChat" class="section">
 <h2>💬 Assistente IA da Aldra</h2>
 <p>A IA ajuda na gestão administrativa, financeira e atendimento.</p>
 </div>
 
-<!-- CRM -->
-
 <div id="sectionCRM" class="section">
 
 <h2>👥 CRM</h2>
 
 <input id="crmNome" placeholder="Nome do cliente">
-
 <input id="crmEmail" placeholder="Email do cliente">
-
 <input id="crmTelefone" placeholder="Telefone">
 
 <button class="action" onclick="salvarCliente()">
@@ -307,7 +286,6 @@ Salvar Cliente
 </button>
 
 <table>
-
 <thead>
 <tr>
 <th>Nome</th>
@@ -317,47 +295,36 @@ Salvar Cliente
 </thead>
 
 <tbody id="crmLista"></tbody>
-
 </table>
 
 </div>
-
-<!-- ESTOQUE -->
 
 <div id="sectionEstoque" class="section">
 <h2>📦 Controle de Estoque</h2>
 <p>Gestão de produtos, entrada e saída de mercadorias.</p>
 </div>
 
-<!-- FINANCEIRO -->
-
 <div id="sectionFinanceiro" class="section">
 <h2>💰 Financeiro</h2>
 <p>Contas a pagar, contas a receber e fluxo de caixa.</p>
 </div>
-
-<!-- FISCAL -->
 
 <div id="sectionFiscal" class="section">
 <h2>📑 Gestão Fiscal</h2>
 <p>Apuração de impostos e obrigações fiscais.</p>
 </div>
 
-<!-- CERTIDÕES -->
-
 <div id="sectionCertidoes" class="section">
 <h2>📜 Certidões</h2>
 <p>Controle de validade de certidões da empresa.</p>
 </div>
-
-<!-- ADMIN -->
 
 <div id="sectionAdmin" class="section">
 <h2>🏢 Administrativo</h2>
 <p>Gestão interna, documentos e tarefas.</p>
 </div>
 
-<script src="/js/dashboard.js?v=5"></script>
+<script src="/js/dashboard.js?v=6"></script>
 
 </body>
 </html>
