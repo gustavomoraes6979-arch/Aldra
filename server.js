@@ -236,14 +236,18 @@ app.post("/subscription/create", auth, async (req, res) => {
       }
     });
 
+    const paymentId = result.body.id;
+
+    console.log("Pagamento criado:", paymentId);
+
     await dbRun(
       `UPDATE subscriptions
        SET payment_id=?, status='pending'
        WHERE user_id=?`,
-      [result.id, req.user.id]
+      [paymentId, req.user.id]
     );
 
-    res.json(result);
+    res.json(result.body);
 
   } catch (err) {
 
