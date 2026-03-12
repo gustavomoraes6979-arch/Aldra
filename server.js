@@ -11,6 +11,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { fileURLToPath } from "url";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -19,7 +20,7 @@ dotenv.config();
 // =======================================================================
 
 const ADMIN_EMAIL = "moraes_gu@hotmail.com".toLowerCase();
-const PLAN_PRICE = 1;
+const PLAN_PRICE = Number(1.00);
 
 const BASE_URL = process.env.BASE_URL || "https://aldra.onrender.com";
 
@@ -27,7 +28,7 @@ if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
 if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
 
 const mpClient = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN.trim(),
+  accessToken: process.env.MP_ACCESS_TOKEN.trim()
 });
 
 const payment = new Payment(mpClient);
@@ -156,7 +157,9 @@ app.post("/auth/register", async (req, res) => {
 
     res.json({ success: true });
 
-  } catch {
+  } catch (err) {
+
+    console.log("Erro registro:", err);
 
     res.status(400).json({ error: "Email já existe" });
 
@@ -194,7 +197,7 @@ app.post("/auth/login", async (req, res) => {
     redirect:
       user.email === ADMIN_EMAIL
         ? "/admin-dashboard.html"
-        : "/dashboard.html",
+        : "/dashboard.html"
   });
 
 });
@@ -226,19 +229,26 @@ app.post("/subscription/create", auth, async (req, res) => {
 
   try {
 
+    const idempotencyKey = crypto.randomUUID();
+
     const result = await payment.create({
       body: {
         transaction_amount: PLAN_PRICE,
         description: "Assinatura Aldra",
         payment_method_id: "pix",
-        payer: { email: req.user.email },
+        payer: {
+          email: req.user.email
+        },
         notification_url: `${BASE_URL}/webhook/mercadopago`
+      },
+      requestOptions: {
+        idempotencyKey
       }
     });
 
     const paymentId = result.body.id;
 
-    console.log("Pagamento criado:", paymentId);
+    console.log("PIX criado:", paymentId);
 
     await dbRun(
       `UPDATE subscriptions
@@ -251,9 +261,12 @@ app.post("/subscription/create", auth, async (req, res) => {
 
   } catch (err) {
 
-    console.log("Erro criar PIX:", err);
+    console.log("ERRO MERCADO PAGO:", err);
 
-    res.status(500).json({ error: "Erro PIX" });
+    res.status(500).json({
+      error: "Erro ao criar pagamento",
+      details: err.message
+    });
 
   }
 
@@ -267,23 +280,19 @@ app.post("/webhook/mercadopago", async (req, res) => {
 
   try {
 
-    console.log("Webhook recebido:", req.body);
-
     const paymentId =
       req.body?.data?.id ||
       req.body?.id ||
       req.query?.id;
 
-    if (!paymentId) {
-      console.log("Webhook sem paymentId");
+    if (!paymentId)
       return res.sendStatus(200);
-    }
 
     const paymentData = await payment.get({ id: paymentId });
 
     const status = paymentData.body?.status;
 
-    console.log("Status pagamento:", status);
+    console.log("Webhook status:", status);
 
     if (status === "approved") {
 
@@ -294,7 +303,7 @@ app.post("/webhook/mercadopago", async (req, res) => {
         [paymentId]
       );
 
-      console.log("Assinatura ativada!");
+      console.log("Assinatura ativada");
 
     }
 
@@ -331,8 +340,6 @@ app.get("/subscription/check", auth, async (req, res) => {
     });
 
     const status = paymentData.body?.status;
-
-    console.log("Status consulta:", status);
 
     if (status === "approved") {
 
