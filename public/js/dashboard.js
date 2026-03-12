@@ -73,6 +73,8 @@ alertBox.style.display = "none";
 if (pixBox)
 pixBox.style.display = "none";
 
+console.log("✅ Assinatura ativa");
+
 }
 
 // ==========================================
@@ -109,7 +111,7 @@ async function checkSubscription() {
 
 try {
 
-const res = await fetch("/auth/me", {
+const res = await fetch("/subscription/check", {
 headers: {
 Authorization: "Bearer " + token
 }
@@ -122,7 +124,9 @@ return;
 
 const data = await safeJson(res);
 
-if (data.subscription_status === "active") {
+console.log("Status assinatura:", data.status);
+
+if (data.status === "active") {
 
 hideAlert();
 
@@ -134,7 +138,7 @@ showAlert();
 
 } catch (err) {
 
-console.error(err);
+console.error("Erro verificar assinatura:", err);
 showAlert();
 
 }
@@ -493,7 +497,8 @@ async function init() {
 
 await checkSubscription();
 
-setInterval(checkSubscription, 5000);
+/* verifica pagamento automaticamente */
+setInterval(checkSubscription, 4000);
 
 showSection("PDF");
 

@@ -21,7 +21,7 @@ dotenv.config();
 const ADMIN_EMAIL = "moraes_gu@hotmail.com".toLowerCase();
 const PLAN_PRICE = 1;
 
-const BASE_URL = process.env.BASE_URL || "https://seuapp.onrender.com";
+const BASE_URL = process.env.BASE_URL || "https://aldra.onrender.com";
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
 if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
@@ -74,15 +74,6 @@ function dbGet(query, params = []) {
   });
 }
 
-function dbAll(query, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(query, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
-}
-
 db.serialize(() => {
 
   db.run(`
@@ -101,42 +92,6 @@ db.serialize(() => {
     status TEXT DEFAULT 'pending',
     payment_id TEXT,
     expires_at DATETIME
-  )`);
-
-  db.run(`
-  CREATE TABLE IF NOT EXISTS crm_clients(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    name TEXT,
-    phone TEXT,
-    email TEXT,
-    pipeline_stage TEXT DEFAULT 'lead',
-    deal_value REAL DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  db.run(`
-  CREATE TABLE IF NOT EXISTS accounts(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    type TEXT,
-    description TEXT,
-    value REAL,
-    due_date DATETIME,
-    status TEXT DEFAULT 'pending',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  db.run(`
-  CREATE TABLE IF NOT EXISTS products(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    name TEXT,
-    sku TEXT,
-    cost REAL,
-    price REAL,
-    quantity INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
 });
@@ -264,7 +219,7 @@ app.get("/auth/me", auth, async (req, res) => {
 });
 
 // =======================================================================
-// PIX ASSINATURA
+// CRIAR PIX
 // =======================================================================
 
 app.post("/subscription/create", auth, async (req, res) => {
@@ -277,7 +232,6 @@ app.post("/subscription/create", auth, async (req, res) => {
         description: "Assinatura Aldra",
         payment_method_id: "pix",
         payer: { email: req.user.email },
-
         notification_url: `${BASE_URL}/webhook/mercadopago`
       }
     });
@@ -302,7 +256,7 @@ app.post("/subscription/create", auth, async (req, res) => {
 });
 
 // =======================================================================
-// WEBHOOK MERCADO PAGO
+// WEBHOOK
 // =======================================================================
 
 app.post("/webhook/mercadopago", async (req, res) => {
@@ -311,16 +265,23 @@ app.post("/webhook/mercadopago", async (req, res) => {
 
     console.log("Webhook recebido:", req.body);
 
-    const paymentId = req.body?.data?.id;
+    const paymentId =
+      req.body?.data?.id ||
+      req.body?.id ||
+      req.query?.id;
 
-    if (!paymentId)
+    if (!paymentId) {
+      console.log("Webhook sem paymentId");
       return res.sendStatus(200);
+    }
 
     const paymentData = await payment.get({ id: paymentId });
 
-    console.log("Status pagamento:", paymentData.status);
+    const status = paymentData.body?.status;
 
-    if (paymentData.status === "approved") {
+    console.log("Status pagamento:", status);
+
+    if (status === "approved") {
 
       await dbRun(
         `UPDATE subscriptions
@@ -346,35 +307,51 @@ app.post("/webhook/mercadopago", async (req, res) => {
 });
 
 // =======================================================================
-// VERIFICAR PAGAMENTO (backup)
+// VERIFICAR PAGAMENTO
 // =======================================================================
 
 app.get("/subscription/check", auth, async (req, res) => {
 
-  const sub = await dbGet(
-    `SELECT * FROM subscriptions WHERE user_id=?`,
-    [req.user.id]
-  );
+  try {
 
-  if (!sub?.payment_id)
-    return res.json({ status: "pending" });
-
-  const paymentData = await payment.get({ id: sub.payment_id });
-
-  if (paymentData.status === "approved") {
-
-    await dbRun(
-      `UPDATE subscriptions
-       SET status='active'
-       WHERE user_id=?`,
+    const sub = await dbGet(
+      `SELECT * FROM subscriptions WHERE user_id=?`,
       [req.user.id]
     );
 
-    return res.json({ status: "active" });
+    if (!sub?.payment_id)
+      return res.json({ status: "pending" });
+
+    const paymentData = await payment.get({
+      id: sub.payment_id
+    });
+
+    const status = paymentData.body?.status;
+
+    console.log("Status consulta:", status);
+
+    if (status === "approved") {
+
+      await dbRun(
+        `UPDATE subscriptions
+         SET status='active'
+         WHERE user_id=?`,
+        [req.user.id]
+      );
+
+      return res.json({ status: "active" });
+
+    }
+
+    res.json({ status });
+
+  } catch (err) {
+
+    console.log("Erro verificar pagamento:", err);
+
+    res.json({ status: "pending" });
 
   }
-
-  res.json({ status: paymentData.status });
 
 });
 
