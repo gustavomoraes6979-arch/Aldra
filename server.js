@@ -246,9 +246,9 @@ app.post("/subscription/create", auth, async (req, res) => {
       }
     });
 
-    const paymentId = result.body.id;
+    const data = result.body;
 
-    console.log("PIX criado:", paymentId);
+    const paymentId = data.id;
 
     await dbRun(
       `UPDATE subscriptions
@@ -257,11 +257,31 @@ app.post("/subscription/create", auth, async (req, res) => {
       [paymentId, req.user.id]
     );
 
-    res.json(result.body);
+    const qrBase64 =
+      data?.point_of_interaction?.transaction_data?.qr_code_base64;
+
+    const qrCode =
+      data?.point_of_interaction?.transaction_data?.qr_code;
+
+    if (!qrBase64) {
+
+      console.log("QR Code não retornado:", data);
+
+      return res.status(500).json({
+        error: "QR Code não gerado"
+      });
+
+    }
+
+    res.json({
+      payment_id: paymentId,
+      qr_code_base64: qrBase64,
+      qr_code: qrCode
+    });
 
   } catch (err) {
 
-    console.log("ERRO MERCADO PAGO:", err);
+    console.log("Erro criar PIX:", err);
 
     res.status(500).json({
       error: "Erro ao criar pagamento",
