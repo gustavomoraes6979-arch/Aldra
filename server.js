@@ -21,6 +21,8 @@ dotenv.config();
 const ADMIN_EMAIL = "moraes_gu@hotmail.com".toLowerCase();
 const PLAN_PRICE = 1;
 
+const BASE_URL = process.env.BASE_URL || "https://seuapp.onrender.com";
+
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
 if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
 
@@ -110,8 +112,6 @@ db.serialize(() => {
     email TEXT,
     pipeline_stage TEXT DEFAULT 'lead',
     deal_value REAL DEFAULT 0,
-    last_contact DATETIME,
-    next_followup DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
@@ -139,15 +139,6 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  db.run(`
-  CREATE TABLE IF NOT EXISTS stock_history(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    product_id INTEGER,
-    type TEXT,
-    quantity INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
 });
 
 // =======================================================================
@@ -164,7 +155,6 @@ async function auth(req, res, next) {
   try {
 
     const token = header.replace("Bearer ", "");
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const user = await dbGet(`SELECT * FROM users WHERE id=?`, [decoded.id]);
@@ -186,15 +176,6 @@ async function auth(req, res, next) {
 
 }
 
-function adminOnly(req, res, next) {
-
-  if (!req.user?.is_admin)
-    return res.status(403).json({ error: "Admin apenas" });
-
-  next();
-
-}
-
 // =======================================================================
 // REGISTER
 // =======================================================================
@@ -204,9 +185,6 @@ app.post("/auth/register", async (req, res) => {
   try {
 
     const { name, email, password } = req.body;
-
-    if (!email || !password)
-      return res.status(400).json({ error: "Dados inválidos" });
 
     const hash = bcrypt.hashSync(password, 10);
 
@@ -286,156 +264,6 @@ app.get("/auth/me", auth, async (req, res) => {
 });
 
 // =======================================================================
-// CRM
-// =======================================================================
-
-app.get("/crm", auth, async (req, res) => {
-
-  const rows = await dbAll(
-    `SELECT * FROM crm_clients WHERE user_id=?`,
-    [req.user.id]
-  );
-
-  res.json(rows);
-
-});
-
-app.post("/crm", auth, async (req, res) => {
-
-  const { name, phone, email, pipeline_stage, deal_value } = req.body;
-
-  if (!name)
-    return res.status(400).json({ error: "Nome obrigatório" });
-
-  await dbRun(
-    `INSERT INTO crm_clients(user_id,name,phone,email,pipeline_stage,deal_value)
-     VALUES(?,?,?,?,?,?)`,
-    [req.user.id, name, phone, email, pipeline_stage || "lead", deal_value || 0]
-  );
-
-  res.json({ success: true });
-
-});
-
-// =======================================================================
-// FINANCEIRO
-// =======================================================================
-
-app.get("/finance/accounts", auth, async (req, res) => {
-
-  const rows = await dbAll(
-    `SELECT * FROM accounts WHERE user_id=?`,
-    [req.user.id]
-  );
-
-  res.json(rows);
-
-});
-
-app.post("/finance/accounts", auth, async (req, res) => {
-
-  const { type, description, value, due_date } = req.body;
-
-  await dbRun(
-    `INSERT INTO accounts(user_id,type,description,value,due_date)
-     VALUES(?,?,?,?,?)`,
-    [req.user.id, type, description, value, due_date]
-  );
-
-  res.json({ success: true });
-
-});
-
-// =======================================================================
-// PRODUTOS
-// =======================================================================
-
-app.get("/products", auth, async (req, res) => {
-
-  const rows = await dbAll(
-    `SELECT * FROM products WHERE user_id=?`,
-    [req.user.id]
-  );
-
-  res.json(rows);
-
-});
-
-app.post("/products", auth, async (req, res) => {
-
-  const { name, sku, cost, price, quantity } = req.body;
-
-  await dbRun(
-    `INSERT INTO products(user_id,name,sku,cost,price,quantity)
-     VALUES(?,?,?,?,?,?)`,
-    [req.user.id, name, sku, cost, price, quantity]
-  );
-
-  res.json({ success: true });
-
-});
-
-// =======================================================================
-// IA GROQ
-// =======================================================================
-
-app.post("/ai/analyze", auth, async (req, res) => {
-
-  try {
-
-    const accounts = await dbAll(
-      `SELECT * FROM accounts WHERE user_id=?`,
-      [req.user.id]
-    );
-
-    const totalReceber = accounts
-      .filter(a => a.type === "receber")
-      .reduce((s, a) => s + a.value, 0);
-
-    const totalPagar = accounts
-      .filter(a => a.type === "pagar")
-      .reduce((s, a) => s + a.value, 0);
-
-    const prompt = `
-Receitas: ${totalReceber}
-Despesas: ${totalPagar}
-
-Analise os dados e dê recomendações financeiras.
-`;
-
-    const response = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "llama3-70b-8192",
-          messages: [
-            { role: "system", content: "Consultor financeiro empresarial." },
-            { role: "user", content: prompt }
-          ]
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    res.json({
-      analysis: data.choices?.[0]?.message?.content || "Sem análise"
-    });
-
-  } catch {
-
-    res.status(500).json({ error: "Erro IA" });
-
-  }
-
-});
-
-// =======================================================================
 // PIX ASSINATURA
 // =======================================================================
 
@@ -448,7 +276,9 @@ app.post("/subscription/create", auth, async (req, res) => {
         transaction_amount: PLAN_PRICE,
         description: "Assinatura Aldra",
         payment_method_id: "pix",
-        payer: { email: req.user.email }
+        payer: { email: req.user.email },
+
+        notification_url: `${BASE_URL}/webhook/mercadopago`
       }
     });
 
@@ -461,7 +291,9 @@ app.post("/subscription/create", auth, async (req, res) => {
 
     res.json(result);
 
-  } catch {
+  } catch (err) {
+
+    console.log("Erro criar PIX:", err);
 
     res.status(500).json({ error: "Erro PIX" });
 
@@ -470,12 +302,14 @@ app.post("/subscription/create", auth, async (req, res) => {
 });
 
 // =======================================================================
-// WEBHOOK
+// WEBHOOK MERCADO PAGO
 // =======================================================================
 
 app.post("/webhook/mercadopago", async (req, res) => {
 
   try {
+
+    console.log("Webhook recebido:", req.body);
 
     const paymentId = req.body?.data?.id;
 
@@ -483,6 +317,8 @@ app.post("/webhook/mercadopago", async (req, res) => {
       return res.sendStatus(200);
 
     const paymentData = await payment.get({ id: paymentId });
+
+    console.log("Status pagamento:", paymentData.status);
 
     if (paymentData.status === "approved") {
 
@@ -493,11 +329,15 @@ app.post("/webhook/mercadopago", async (req, res) => {
         [paymentId]
       );
 
+      console.log("Assinatura ativada!");
+
     }
 
     res.sendStatus(200);
 
-  } catch {
+  } catch (err) {
+
+    console.log("Erro webhook:", err);
 
     res.sendStatus(500);
 
@@ -506,21 +346,35 @@ app.post("/webhook/mercadopago", async (req, res) => {
 });
 
 // =======================================================================
-// ADMIN
+// VERIFICAR PAGAMENTO (backup)
 // =======================================================================
 
-app.get("/admin/stats", auth, adminOnly, async (req, res) => {
+app.get("/subscription/check", auth, async (req, res) => {
 
-  const users = await dbGet(`SELECT COUNT(*) as total FROM users`);
-
-  const subs = await dbGet(
-    `SELECT COUNT(*) as active FROM subscriptions WHERE status='active'`
+  const sub = await dbGet(
+    `SELECT * FROM subscriptions WHERE user_id=?`,
+    [req.user.id]
   );
 
-  res.json({
-    users: users.total,
-    active_subscriptions: subs.active
-  });
+  if (!sub?.payment_id)
+    return res.json({ status: "pending" });
+
+  const paymentData = await payment.get({ id: sub.payment_id });
+
+  if (paymentData.status === "approved") {
+
+    await dbRun(
+      `UPDATE subscriptions
+       SET status='active'
+       WHERE user_id=?`,
+      [req.user.id]
+    );
+
+    return res.json({ status: "active" });
+
+  }
+
+  res.json({ status: paymentData.status });
 
 });
 
