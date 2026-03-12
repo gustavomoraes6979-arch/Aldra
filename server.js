@@ -11,7 +11,6 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { fileURLToPath } from "url";
-import crypto from "crypto";
 
 dotenv.config();
 
@@ -20,15 +19,13 @@ dotenv.config();
 // =======================================================================
 
 const ADMIN_EMAIL = "moraes_gu@hotmail.com".toLowerCase();
-const PLAN_PRICE = Number(1.00);
-
-const BASE_URL = process.env.BASE_URL || "https://aldra.onrender.com";
+const PLAN_PRICE = 1;
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
 if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
 
 const mpClient = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN.trim()
+  accessToken: process.env.MP_ACCESS_TOKEN.trim(),
 });
 
 const payment = new Payment(mpClient);
@@ -75,6 +72,15 @@ function dbGet(query, params = []) {
   });
 }
 
+function dbAll(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(query, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
+}
+
 db.serialize(() => {
 
   db.run(`
@@ -95,6 +101,53 @@ db.serialize(() => {
     expires_at DATETIME
   )`);
 
+  db.run(`
+  CREATE TABLE IF NOT EXISTS crm_clients(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    name TEXT,
+    phone TEXT,
+    email TEXT,
+    pipeline_stage TEXT DEFAULT 'lead',
+    deal_value REAL DEFAULT 0,
+    last_contact DATETIME,
+    next_followup DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`
+  CREATE TABLE IF NOT EXISTS accounts(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    type TEXT,
+    description TEXT,
+    value REAL,
+    due_date DATETIME,
+    status TEXT DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`
+  CREATE TABLE IF NOT EXISTS products(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    name TEXT,
+    sku TEXT,
+    cost REAL,
+    price REAL,
+    quantity INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`
+  CREATE TABLE IF NOT EXISTS stock_history(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER,
+    type TEXT,
+    quantity INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
 });
 
 // =======================================================================
@@ -111,6 +164,7 @@ async function auth(req, res, next) {
   try {
 
     const token = header.replace("Bearer ", "");
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const user = await dbGet(`SELECT * FROM users WHERE id=?`, [decoded.id]);
@@ -132,6 +186,15 @@ async function auth(req, res, next) {
 
 }
 
+function adminOnly(req, res, next) {
+
+  if (!req.user?.is_admin)
+    return res.status(403).json({ error: "Admin apenas" });
+
+  next();
+
+}
+
 // =======================================================================
 // REGISTER
 // =======================================================================
@@ -141,6 +204,9 @@ app.post("/auth/register", async (req, res) => {
   try {
 
     const { name, email, password } = req.body;
+
+    if (!email || !password)
+      return res.status(400).json({ error: "Dados inválidos" });
 
     const hash = bcrypt.hashSync(password, 10);
 
@@ -157,9 +223,7 @@ app.post("/auth/register", async (req, res) => {
 
     res.json({ success: true });
 
-  } catch (err) {
-
-    console.log("Erro registro:", err);
+  } catch {
 
     res.status(400).json({ error: "Email já existe" });
 
@@ -197,7 +261,7 @@ app.post("/auth/login", async (req, res) => {
     redirect:
       user.email === ADMIN_EMAIL
         ? "/admin-dashboard.html"
-        : "/dashboard.html"
+        : "/dashboard.html",
   });
 
 });
@@ -222,71 +286,184 @@ app.get("/auth/me", auth, async (req, res) => {
 });
 
 // =======================================================================
-// CRIAR PIX
+// CRM
+// =======================================================================
+
+app.get("/crm", auth, async (req, res) => {
+
+  const rows = await dbAll(
+    `SELECT * FROM crm_clients WHERE user_id=?`,
+    [req.user.id]
+  );
+
+  res.json(rows);
+
+});
+
+app.post("/crm", auth, async (req, res) => {
+
+  const { name, phone, email, pipeline_stage, deal_value } = req.body;
+
+  if (!name)
+    return res.status(400).json({ error: "Nome obrigatório" });
+
+  await dbRun(
+    `INSERT INTO crm_clients(user_id,name,phone,email,pipeline_stage,deal_value)
+     VALUES(?,?,?,?,?,?)`,
+    [req.user.id, name, phone, email, pipeline_stage || "lead", deal_value || 0]
+  );
+
+  res.json({ success: true });
+
+});
+
+// =======================================================================
+// FINANCEIRO
+// =======================================================================
+
+app.get("/finance/accounts", auth, async (req, res) => {
+
+  const rows = await dbAll(
+    `SELECT * FROM accounts WHERE user_id=?`,
+    [req.user.id]
+  );
+
+  res.json(rows);
+
+});
+
+app.post("/finance/accounts", auth, async (req, res) => {
+
+  const { type, description, value, due_date } = req.body;
+
+  await dbRun(
+    `INSERT INTO accounts(user_id,type,description,value,due_date)
+     VALUES(?,?,?,?,?)`,
+    [req.user.id, type, description, value, due_date]
+  );
+
+  res.json({ success: true });
+
+});
+
+// =======================================================================
+// PRODUTOS
+// =======================================================================
+
+app.get("/products", auth, async (req, res) => {
+
+  const rows = await dbAll(
+    `SELECT * FROM products WHERE user_id=?`,
+    [req.user.id]
+  );
+
+  res.json(rows);
+
+});
+
+app.post("/products", auth, async (req, res) => {
+
+  const { name, sku, cost, price, quantity } = req.body;
+
+  await dbRun(
+    `INSERT INTO products(user_id,name,sku,cost,price,quantity)
+     VALUES(?,?,?,?,?,?)`,
+    [req.user.id, name, sku, cost, price, quantity]
+  );
+
+  res.json({ success: true });
+
+});
+
+// =======================================================================
+// IA GROQ
+// =======================================================================
+
+app.post("/ai/analyze", auth, async (req, res) => {
+
+  try {
+
+    const accounts = await dbAll(
+      `SELECT * FROM accounts WHERE user_id=?`,
+      [req.user.id]
+    );
+
+    const totalReceber = accounts
+      .filter(a => a.type === "receber")
+      .reduce((s, a) => s + a.value, 0);
+
+    const totalPagar = accounts
+      .filter(a => a.type === "pagar")
+      .reduce((s, a) => s + a.value, 0);
+
+    const prompt = `
+Receitas: ${totalReceber}
+Despesas: ${totalPagar}
+
+Analise os dados e dê recomendações financeiras.
+`;
+
+    const response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "llama3-70b-8192",
+          messages: [
+            { role: "system", content: "Consultor financeiro empresarial." },
+            { role: "user", content: prompt }
+          ]
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    res.json({
+      analysis: data.choices?.[0]?.message?.content || "Sem análise"
+    });
+
+  } catch {
+
+    res.status(500).json({ error: "Erro IA" });
+
+  }
+
+});
+
+// =======================================================================
+// PIX ASSINATURA
 // =======================================================================
 
 app.post("/subscription/create", auth, async (req, res) => {
 
   try {
 
-    const idempotencyKey = crypto.randomUUID();
-
     const result = await payment.create({
       body: {
         transaction_amount: PLAN_PRICE,
         description: "Assinatura Aldra",
         payment_method_id: "pix",
-        payer: {
-          email: req.user.email
-        },
-        notification_url: `${BASE_URL}/webhook/mercadopago`
-      },
-      requestOptions: {
-        idempotencyKey
+        payer: { email: req.user.email }
       }
     });
-
-    const data = result.body;
-
-    const paymentId = data.id;
 
     await dbRun(
       `UPDATE subscriptions
        SET payment_id=?, status='pending'
        WHERE user_id=?`,
-      [paymentId, req.user.id]
+      [result.id, req.user.id]
     );
 
-    const qrBase64 =
-      data?.point_of_interaction?.transaction_data?.qr_code_base64;
+    res.json(result);
 
-    const qrCode =
-      data?.point_of_interaction?.transaction_data?.qr_code;
+  } catch {
 
-    if (!qrBase64) {
-
-      console.log("QR Code não retornado:", data);
-
-      return res.status(500).json({
-        error: "QR Code não gerado"
-      });
-
-    }
-
-    res.json({
-      payment_id: paymentId,
-      qr_code_base64: qrBase64,
-      qr_code: qrCode
-    });
-
-  } catch (err) {
-
-    console.log("Erro criar PIX:", err);
-
-    res.status(500).json({
-      error: "Erro ao criar pagamento",
-      details: err.message
-    });
+    res.status(500).json({ error: "Erro PIX" });
 
   }
 
@@ -300,21 +477,14 @@ app.post("/webhook/mercadopago", async (req, res) => {
 
   try {
 
-    const paymentId =
-      req.body?.data?.id ||
-      req.body?.id ||
-      req.query?.id;
+    const paymentId = req.body?.data?.id;
 
     if (!paymentId)
       return res.sendStatus(200);
 
     const paymentData = await payment.get({ id: paymentId });
 
-    const status = paymentData.body?.status;
-
-    console.log("Webhook status:", status);
-
-    if (status === "approved") {
+    if (paymentData.status === "approved") {
 
       await dbRun(
         `UPDATE subscriptions
@@ -323,15 +493,11 @@ app.post("/webhook/mercadopago", async (req, res) => {
         [paymentId]
       );
 
-      console.log("Assinatura ativada");
-
     }
 
     res.sendStatus(200);
 
-  } catch (err) {
-
-    console.log("Erro webhook:", err);
+  } catch {
 
     res.sendStatus(500);
 
@@ -340,49 +506,21 @@ app.post("/webhook/mercadopago", async (req, res) => {
 });
 
 // =======================================================================
-// VERIFICAR PAGAMENTO
+// ADMIN
 // =======================================================================
 
-app.get("/subscription/check", auth, async (req, res) => {
+app.get("/admin/stats", auth, adminOnly, async (req, res) => {
 
-  try {
+  const users = await dbGet(`SELECT COUNT(*) as total FROM users`);
 
-    const sub = await dbGet(
-      `SELECT * FROM subscriptions WHERE user_id=?`,
-      [req.user.id]
-    );
+  const subs = await dbGet(
+    `SELECT COUNT(*) as active FROM subscriptions WHERE status='active'`
+  );
 
-    if (!sub?.payment_id)
-      return res.json({ status: "pending" });
-
-    const paymentData = await payment.get({
-      id: sub.payment_id
-    });
-
-    const status = paymentData.body?.status;
-
-    if (status === "approved") {
-
-      await dbRun(
-        `UPDATE subscriptions
-         SET status='active'
-         WHERE user_id=?`,
-        [req.user.id]
-      );
-
-      return res.json({ status: "active" });
-
-    }
-
-    res.json({ status });
-
-  } catch (err) {
-
-    console.log("Erro verificar pagamento:", err);
-
-    res.json({ status: "pending" });
-
-  }
+  res.json({
+    users: users.total,
+    active_subscriptions: subs.active
+  });
 
 });
 
