@@ -167,10 +167,7 @@ async function auth(req, res, next) {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const user = await dbGet(
-      `SELECT * FROM users WHERE id=?`,
-      [decoded.id]
-    );
+    const user = await dbGet(`SELECT * FROM users WHERE id=?`, [decoded.id]);
 
     if (!user)
       return res.status(401).json({ error: "Usuário inválido" });
@@ -435,6 +432,95 @@ Analise os dados e dê recomendações financeiras.
     res.status(500).json({ error: "Erro IA" });
 
   }
+
+});
+
+// =======================================================================
+// PIX ASSINATURA
+// =======================================================================
+
+app.post("/subscription/create", auth, async (req, res) => {
+
+  try {
+
+    const result = await payment.create({
+      body: {
+        transaction_amount: PLAN_PRICE,
+        description: "Assinatura Aldra",
+        payment_method_id: "pix",
+        payer: { email: req.user.email }
+      }
+    });
+
+    await dbRun(
+      `UPDATE subscriptions
+       SET payment_id=?, status='pending'
+       WHERE user_id=?`,
+      [result.id, req.user.id]
+    );
+
+    res.json(result);
+
+  } catch {
+
+    res.status(500).json({ error: "Erro PIX" });
+
+  }
+
+});
+
+// =======================================================================
+// WEBHOOK
+// =======================================================================
+
+app.post("/webhook/mercadopago", async (req, res) => {
+
+  try {
+
+    const paymentId = req.body?.data?.id;
+
+    if (!paymentId)
+      return res.sendStatus(200);
+
+    const paymentData = await payment.get({ id: paymentId });
+
+    if (paymentData.status === "approved") {
+
+      await dbRun(
+        `UPDATE subscriptions
+         SET status='active'
+         WHERE payment_id=?`,
+        [paymentId]
+      );
+
+    }
+
+    res.sendStatus(200);
+
+  } catch {
+
+    res.sendStatus(500);
+
+  }
+
+});
+
+// =======================================================================
+// ADMIN
+// =======================================================================
+
+app.get("/admin/stats", auth, adminOnly, async (req, res) => {
+
+  const users = await dbGet(`SELECT COUNT(*) as total FROM users`);
+
+  const subs = await dbGet(
+    `SELECT COUNT(*) as active FROM subscriptions WHERE status='active'`
+  );
+
+  res.json({
+    users: users.total,
+    active_subscriptions: subs.active
+  });
 
 });
 
