@@ -1,10 +1,5 @@
 // =======================================================================
-// ALDRA ERP — SERVER
-// ERP + CRM + FINANCEIRO + IA GROQ + PIX MERCADO PAGO
-// =======================================================================
-
-// =======================================================================
-// IMPORTS
+// Aldra — server.js (ERP + IA GROQ COMPLETO ESTÁVEL)
 // =======================================================================
 
 import express from "express";
@@ -17,25 +12,26 @@ import jwt from "jsonwebtoken";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { fileURLToPath } from "url";
 
-// =======================================================================
-// ENV
-// =======================================================================
-
 dotenv.config();
 
-if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
-if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
-
 // =======================================================================
-// CONFIGURAÇÕES
+// CONFIG
 // =======================================================================
 
 const ADMIN_EMAIL = "moraes_gu@hotmail.com".toLowerCase();
 const PLAN_PRICE = 1;
-const PORT = process.env.PORT || 3000;
+
+if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
+if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
+
+const mpClient = new MercadoPagoConfig({
+  accessToken: process.env.MP_ACCESS_TOKEN.trim(),
+});
+
+const payment = new Payment(mpClient);
 
 // =======================================================================
-// PATHS
+// PATH
 // =======================================================================
 
 const __filename = fileURLToPath(import.meta.url);
@@ -47,19 +43,10 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 // =======================================================================
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-
-// =======================================================================
-// MERCADO PAGO
-// =======================================================================
-
-const mpClient = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN.trim(),
-});
-
-const payment = new Payment(mpClient);
 
 // =======================================================================
 // DATABASE
@@ -93,10 +80,6 @@ function dbAll(query, params = []) {
     });
   });
 }
-
-// =======================================================================
-// CRIAR TABELAS
-// =======================================================================
 
 db.serialize(() => {
 
@@ -168,7 +151,7 @@ db.serialize(() => {
 });
 
 // =======================================================================
-// MIDDLEWARE AUTH
+// AUTH
 // =======================================================================
 
 async function auth(req, res, next) {
@@ -216,7 +199,7 @@ function adminOnly(req, res, next) {
 }
 
 // =======================================================================
-// AUTH REGISTER
+// REGISTER
 // =======================================================================
 
 app.post("/auth/register", async (req, res) => {
@@ -231,8 +214,7 @@ app.post("/auth/register", async (req, res) => {
     const hash = bcrypt.hashSync(password, 10);
 
     const result = await dbRun(
-      `INSERT INTO users(name,email,password)
-       VALUES(?,?,?)`,
+      `INSERT INTO users(name,email,password) VALUES(?,?,?)`,
       [name, email.toLowerCase(), hash]
     );
 
@@ -253,7 +235,7 @@ app.post("/auth/register", async (req, res) => {
 });
 
 // =======================================================================
-// AUTH LOGIN
+// LOGIN
 // =======================================================================
 
 app.post("/auth/login", async (req, res) => {
@@ -329,9 +311,8 @@ app.post("/crm", auth, async (req, res) => {
     return res.status(400).json({ error: "Nome obrigatório" });
 
   await dbRun(
-    `INSERT INTO crm_clients
-    (user_id,name,phone,email,pipeline_stage,deal_value)
-    VALUES(?,?,?,?,?,?)`,
+    `INSERT INTO crm_clients(user_id,name,phone,email,pipeline_stage,deal_value)
+     VALUES(?,?,?,?,?,?)`,
     [req.user.id, name, phone, email, pipeline_stage || "lead", deal_value || 0]
   );
 
@@ -359,9 +340,8 @@ app.post("/finance/accounts", auth, async (req, res) => {
   const { type, description, value, due_date } = req.body;
 
   await dbRun(
-    `INSERT INTO accounts
-    (user_id,type,description,value,due_date)
-    VALUES(?,?,?,?,?)`,
+    `INSERT INTO accounts(user_id,type,description,value,due_date)
+     VALUES(?,?,?,?,?)`,
     [req.user.id, type, description, value, due_date]
   );
 
@@ -389,9 +369,8 @@ app.post("/products", auth, async (req, res) => {
   const { name, sku, cost, price, quantity } = req.body;
 
   await dbRun(
-    `INSERT INTO products
-    (user_id,name,sku,cost,price,quantity)
-    VALUES(?,?,?,?,?,?)`,
+    `INSERT INTO products(user_id,name,sku,cost,price,quantity)
+     VALUES(?,?,?,?,?,?)`,
     [req.user.id, name, sku, cost, price, quantity]
   );
 
@@ -460,98 +439,7 @@ Analise os dados e dê recomendações financeiras.
 });
 
 // =======================================================================
-// ASSINATURA PIX
-// =======================================================================
-
-app.post("/subscription/create", auth, async (req, res) => {
-
-  try {
-
-    const result = await payment.create({
-      body: {
-        transaction_amount: PLAN_PRICE,
-        description: "Assinatura Aldra",
-        payment_method_id: "pix",
-        payer: { email: req.user.email }
-      }
-    });
-
-    await dbRun(
-      `UPDATE subscriptions
-       SET payment_id=?, status='pending'
-       WHERE user_id=?`,
-      [result.id, req.user.id]
-    );
-
-    res.json(result);
-
-  } catch {
-
-    res.status(500).json({ error: "Erro PIX" });
-
-  }
-
-});
-
-// =======================================================================
-// WEBHOOK MERCADO PAGO
-// =======================================================================
-
-app.post("/webhook/mercadopago", async (req, res) => {
-
-  try {
-
-    const paymentId = req.body?.data?.id;
-
-    if (!paymentId)
-      return res.sendStatus(200);
-
-    const paymentData = await payment.get({ id: paymentId });
-
-    if (paymentData.status === "approved") {
-
-      await dbRun(
-        `UPDATE subscriptions
-         SET status='active'
-         WHERE payment_id=?`,
-        [paymentId]
-      );
-
-    }
-
-    res.sendStatus(200);
-
-  } catch {
-
-    res.sendStatus(500);
-
-  }
-
-});
-
-// =======================================================================
-// ADMIN
-// =======================================================================
-
-app.get("/admin/stats", auth, adminOnly, async (req, res) => {
-
-  const users = await dbGet(
-    `SELECT COUNT(*) as total FROM users`
-  );
-
-  const subs = await dbGet(
-    `SELECT COUNT(*) as active FROM subscriptions WHERE status='active'`
-  );
-
-  res.json({
-    users: users.total,
-    active_subscriptions: subs.active
-  });
-
-});
-
-// =======================================================================
-// STATIC FILES
+// STATIC
 // =======================================================================
 
 app.use(express.static(PUBLIC_DIR));
@@ -560,8 +448,6 @@ app.get("/*", (_, res) =>
   res.sendFile(path.join(PUBLIC_DIR, "index.html"))
 );
 
-// =======================================================================
-// START SERVER
 // =======================================================================
 
 app.listen(PORT, () =>
