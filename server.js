@@ -101,42 +101,6 @@ db.serialize(() => {
     expires_at DATETIME
   )`);
 
-  db.run(`
-  CREATE TABLE IF NOT EXISTS crm_clients(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    name TEXT,
-    phone TEXT,
-    email TEXT,
-    pipeline_stage TEXT DEFAULT 'lead',
-    deal_value REAL DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  db.run(`
-  CREATE TABLE IF NOT EXISTS accounts(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    type TEXT,
-    description TEXT,
-    value REAL,
-    due_date DATETIME,
-    status TEXT DEFAULT 'pending',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  db.run(`
-  CREATE TABLE IF NOT EXISTS products(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    name TEXT,
-    sku TEXT,
-    cost REAL,
-    price REAL,
-    quantity INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
 });
 
 // =======================================================================
@@ -252,42 +216,6 @@ app.post("/auth/login", async (req, res) => {
 });
 
 // =======================================================================
-// AUTH ME
-// =======================================================================
-
-app.get("/auth/me", auth, async (req, res) => {
-
-  const sub = await dbGet(
-    `SELECT status FROM subscriptions WHERE user_id=?`,
-    [req.user.id]
-  );
-
-  res.json({
-    email: req.user.email,
-    is_admin: req.user.is_admin,
-    subscription_status: sub?.status || "pending"
-  });
-
-});
-
-// =======================================================================
-// CHECK ASSINATURA (IMPORTANTE)
-// =======================================================================
-
-app.get("/subscription/check", auth, async (req, res) => {
-
-  const sub = await dbGet(
-    `SELECT status FROM subscriptions WHERE user_id=?`,
-    [req.user.id]
-  );
-
-  res.json({
-    status: sub?.status || "pending"
-  });
-
-});
-
-// =======================================================================
 // PIX ASSINATURA
 // =======================================================================
 
@@ -358,27 +286,68 @@ app.post("/webhook/mercadopago", async (req, res) => {
 });
 
 // =======================================================================
-// ADMIN PROTEGIDO
+// ADMIN MÉTRICAS
 // =======================================================================
 
-app.get("/admin-dashboard.html", auth, adminOnly, (req, res) => {
-
-  res.sendFile(path.join(PUBLIC_DIR, "admin-dashboard.html"));
-
-});
-
-app.get("/admin/stats", auth, adminOnly, async (req, res) => {
+app.get("/admin/metrics", auth, adminOnly, async (req, res) => {
 
   const users = await dbGet(`SELECT COUNT(*) as total FROM users`);
 
-  const subs = await dbGet(
-    `SELECT COUNT(*) as active FROM subscriptions WHERE status='active'`
+  const active = await dbGet(
+    `SELECT COUNT(*) as total FROM subscriptions WHERE status='active'`
   );
+
+  const pending = await dbGet(
+    `SELECT COUNT(*) as total FROM subscriptions WHERE status='pending'`
+  );
+
+  const revenue = active.total * PLAN_PRICE;
 
   res.json({
     users: users.total,
-    active_subscriptions: subs.active
+    active: active.total,
+    pending: pending.total,
+    revenue
   });
+
+});
+
+// =======================================================================
+// ADMIN LISTAR USUÁRIOS
+// =======================================================================
+
+app.get("/admin/users", auth, adminOnly, async (req, res) => {
+
+  const users = await dbAll(`
+    SELECT
+      users.id,
+      users.name,
+      users.email,
+      subscriptions.status
+    FROM users
+    LEFT JOIN subscriptions
+    ON users.id = subscriptions.user_id
+    ORDER BY users.created_at DESC
+  `);
+
+  res.json(users);
+
+});
+
+// =======================================================================
+// ADMIN APROVAR MANUAL
+// =======================================================================
+
+app.post("/admin/approve/:id", auth, adminOnly, async (req, res) => {
+
+  const id = req.params.id;
+
+  await dbRun(
+    `UPDATE subscriptions SET status='active' WHERE user_id=?`,
+    [id]
+  );
+
+  res.json({ success: true });
 
 });
 
