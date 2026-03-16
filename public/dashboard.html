@@ -49,8 +49,6 @@ font-size:20px;
 color:var(--azul-escuro);
 }
 
-/* HEADER ACTIONS */
-
 .header-actions{
 display:flex;
 gap:10px;
@@ -67,7 +65,7 @@ cursor:pointer;
 .btn-admin{
 background:#111;
 color:#fff;
-display:none; /* ESCONDIDO POR PADRÃO */
+display:none;
 }
 
 .btn-logout{
@@ -171,8 +169,6 @@ width:220px;
 margin-top:10px;
 }
 
-/* TITLES */
-
 .section h2{
 margin-top:0;
 color:var(--azul-escuro);
@@ -202,6 +198,7 @@ Sair
 
 </header>
 
+
 <!-- ALERTA ASSINATURA -->
 
 <div id="alert" class="alert">
@@ -222,11 +219,12 @@ Assinar Plano de Lançamento — R$ 1,00
 
 <p><strong>Copia e Cola:</strong></p>
 
-<textarea id="pixCode" readonly placeholder="Código PIX aparecerá aqui"></textarea>
+<textarea id="pixCode" readonly></textarea>
 
 </div>
 
 </div>
+
 
 <!-- MENU -->
 
@@ -246,32 +244,48 @@ Assinar Plano de Lançamento — R$ 1,00
 
 </div>
 
-<!-- SECTIONS -->
+
+<!-- PDF -->
 
 <div id="sectionPDF" class="section active">
 <h2>📄 Análise de PDF</h2>
 <p>Envie documentos para análise automática com IA.</p>
 </div>
 
+
+<!-- CONTRATO -->
+
 <div id="sectionContrato" class="section">
 <h2>📝 Gerador de Contratos</h2>
 <p>Criação automática de contratos empresariais.</p>
 </div>
+
+
+<!-- COBRANÇA -->
 
 <div id="sectionCobranca" class="section">
 <h2>💳 Sistema de Cobrança</h2>
 <p>Envie cobranças via PIX e controle pagamentos.</p>
 </div>
 
+
+<!-- RELATÓRIOS -->
+
 <div id="sectionRelatorios" class="section">
 <h2>📊 Relatórios</h2>
 <p>Relatórios financeiros e administrativos.</p>
 </div>
 
+
+<!-- IA -->
+
 <div id="sectionChat" class="section">
 <h2>💬 Assistente IA da Aldra</h2>
 <p>A IA ajuda na gestão administrativa, financeira e atendimento.</p>
 </div>
+
+
+<!-- CRM -->
 
 <div id="sectionCRM" class="section">
 
@@ -299,32 +313,76 @@ Salvar Cliente
 
 </div>
 
+
+<!-- ESTOQUE -->
+
 <div id="sectionEstoque" class="section">
+
 <h2>📦 Controle de Estoque</h2>
-<p>Gestão de produtos, entrada e saída de mercadorias.</p>
+
+<table>
+<thead>
+<tr>
+<th>Produto</th>
+<th>SKU</th>
+<th>Quantidade</th>
+<th>Preço</th>
+</tr>
+</thead>
+
+<tbody id="estoqueLista"></tbody>
+</table>
+
 </div>
 
+
+<!-- FINANCEIRO -->
+
 <div id="sectionFinanceiro" class="section">
+
 <h2>💰 Financeiro</h2>
-<p>Contas a pagar, contas a receber e fluxo de caixa.</p>
+
+<table>
+<thead>
+<tr>
+<th>Descrição</th>
+<th>Tipo</th>
+<th>Valor</th>
+<th>Status</th>
+</tr>
+</thead>
+
+<tbody id="financeiroLista"></tbody>
+</table>
+
 </div>
+
+
+<!-- FISCAL -->
 
 <div id="sectionFiscal" class="section">
 <h2>📑 Gestão Fiscal</h2>
 <p>Apuração de impostos e obrigações fiscais.</p>
 </div>
 
+
+<!-- CERTIDÕES -->
+
 <div id="sectionCertidoes" class="section">
 <h2>📜 Certidões</h2>
 <p>Controle de validade de certidões da empresa.</p>
 </div>
+
+
+<!-- ADMIN -->
 
 <div id="sectionAdmin" class="section">
 <h2>🏢 Administrativo</h2>
 <p>Gestão interna, documentos e tarefas.</p>
 </div>
 
-<script src="/js/dashboard.js?v=6"></script>
+
+<script src="/js/dashboard.js?v=7"></script>
 
 </body>
 </html>

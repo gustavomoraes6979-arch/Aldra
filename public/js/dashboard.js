@@ -1,4 +1,3 @@
-```javascript
 // ==========================================
 // dashboard.js — CLIENTE (ERP ALDRA COMPLETO)
 // ==========================================
@@ -22,9 +21,6 @@ const pixCopiaCola = document.getElementById("pixCode");
 const crmLista = document.getElementById("crmLista");
 const estoqueLista = document.getElementById("estoqueLista");
 const financeiroLista = document.getElementById("financeiroLista");
-
-const chatInput = document.getElementById("chatInput");
-const chatBox = document.getElementById("chatBox");
 
 const adminBtn = document.getElementById("adminBtn");
 
@@ -57,7 +53,7 @@ return {};
 
 
 // ==========================================
-// VERIFICAR USUÁRIO (ADMIN)
+// VERIFICAR USUÁRIO + ASSINATURA
 // ==========================================
 
 async function checkUser() {
@@ -73,6 +69,9 @@ Authorization: "Bearer " + token
 const data = await safeJson(res);
 
 console.log("Usuário:", data.email);
+console.log("Status assinatura:", data.subscription_status);
+
+// ADMIN
 
 if (data.is_admin) {
 
@@ -83,9 +82,22 @@ adminBtn.style.display = "inline-block";
 
 }
 
+// ASSINATURA
+
+if (data.subscription_status === "active") {
+
+hideAlert();
+
+} else {
+
+showAlert();
+
+}
+
 } catch (err) {
 
 console.error("Erro ao verificar usuário:", err);
+showAlert();
 
 }
 
@@ -143,49 +155,6 @@ pixCopiaCola.value = pixData.qr_code;
 
 if (pixBox)
 pixBox.style.display = "block";
-
-}
-
-
-// ==========================================
-// VERIFICAR ASSINATURA
-// ==========================================
-
-async function checkSubscription() {
-
-try {
-
-const res = await fetch("/subscription/check", {
-headers: {
-Authorization: "Bearer " + token
-}
-});
-
-if (!res.ok) {
-showAlert();
-return;
-}
-
-const data = await safeJson(res);
-
-console.log("Status assinatura:", data.status);
-
-if (data.status === "active") {
-
-hideAlert();
-
-} else {
-
-showAlert();
-
-}
-
-} catch (err) {
-
-console.error("Erro verificar assinatura:", err);
-showAlert();
-
-}
 
 }
 
@@ -489,11 +458,10 @@ window.location.href = "/";
 
 async function init() {
 
-await checkUser(); // VERIFICA ADMIN
+await checkUser();
 
-await checkSubscription();
-
-setInterval(checkSubscription, 4000);
+/* verifica assinatura automaticamente */
+setInterval(checkUser, 4000);
 
 showSection("PDF");
 
@@ -502,4 +470,3 @@ showSection("PDF");
 init();
 
 })();
-```

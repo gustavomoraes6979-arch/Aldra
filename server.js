@@ -110,8 +110,6 @@ db.serialize(() => {
     email TEXT,
     pipeline_stage TEXT DEFAULT 'lead',
     deal_value REAL DEFAULT 0,
-    last_contact DATETIME,
-    next_followup DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
@@ -139,15 +137,6 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  db.run(`
-  CREATE TABLE IF NOT EXISTS stock_history(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    product_id INTEGER,
-    type TEXT,
-    quantity INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
 });
 
 // =======================================================================
@@ -164,7 +153,6 @@ async function auth(req, res, next) {
   try {
 
     const token = header.replace("Bearer ", "");
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const user = await dbGet(`SELECT * FROM users WHERE id=?`, [decoded.id]);
@@ -204,9 +192,6 @@ app.post("/auth/register", async (req, res) => {
   try {
 
     const { name, email, password } = req.body;
-
-    if (!email || !password)
-      return res.status(400).json({ error: "Dados inválidos" });
 
     const hash = bcrypt.hashSync(password, 10);
 
@@ -286,152 +271,19 @@ app.get("/auth/me", auth, async (req, res) => {
 });
 
 // =======================================================================
-// CRM
+// CHECK ASSINATURA (IMPORTANTE)
 // =======================================================================
 
-app.get("/crm", auth, async (req, res) => {
+app.get("/subscription/check", auth, async (req, res) => {
 
-  const rows = await dbAll(
-    `SELECT * FROM crm_clients WHERE user_id=?`,
+  const sub = await dbGet(
+    `SELECT status FROM subscriptions WHERE user_id=?`,
     [req.user.id]
   );
 
-  res.json(rows);
-
-});
-
-app.post("/crm", auth, async (req, res) => {
-
-  const { name, phone, email, pipeline_stage, deal_value } = req.body;
-
-  if (!name)
-    return res.status(400).json({ error: "Nome obrigatório" });
-
-  await dbRun(
-    `INSERT INTO crm_clients(user_id,name,phone,email,pipeline_stage,deal_value)
-     VALUES(?,?,?,?,?,?)`,
-    [req.user.id, name, phone, email, pipeline_stage || "lead", deal_value || 0]
-  );
-
-  res.json({ success: true });
-
-});
-
-// =======================================================================
-// FINANCEIRO
-// =======================================================================
-
-app.get("/finance/accounts", auth, async (req, res) => {
-
-  const rows = await dbAll(
-    `SELECT * FROM accounts WHERE user_id=?`,
-    [req.user.id]
-  );
-
-  res.json(rows);
-
-});
-
-app.post("/finance/accounts", auth, async (req, res) => {
-
-  const { type, description, value, due_date } = req.body;
-
-  await dbRun(
-    `INSERT INTO accounts(user_id,type,description,value,due_date)
-     VALUES(?,?,?,?,?)`,
-    [req.user.id, type, description, value, due_date]
-  );
-
-  res.json({ success: true });
-
-});
-
-// =======================================================================
-// PRODUTOS
-// =======================================================================
-
-app.get("/products", auth, async (req, res) => {
-
-  const rows = await dbAll(
-    `SELECT * FROM products WHERE user_id=?`,
-    [req.user.id]
-  );
-
-  res.json(rows);
-
-});
-
-app.post("/products", auth, async (req, res) => {
-
-  const { name, sku, cost, price, quantity } = req.body;
-
-  await dbRun(
-    `INSERT INTO products(user_id,name,sku,cost,price,quantity)
-     VALUES(?,?,?,?,?,?)`,
-    [req.user.id, name, sku, cost, price, quantity]
-  );
-
-  res.json({ success: true });
-
-});
-
-// =======================================================================
-// IA GROQ
-// =======================================================================
-
-app.post("/ai/analyze", auth, async (req, res) => {
-
-  try {
-
-    const accounts = await dbAll(
-      `SELECT * FROM accounts WHERE user_id=?`,
-      [req.user.id]
-    );
-
-    const totalReceber = accounts
-      .filter(a => a.type === "receber")
-      .reduce((s, a) => s + a.value, 0);
-
-    const totalPagar = accounts
-      .filter(a => a.type === "pagar")
-      .reduce((s, a) => s + a.value, 0);
-
-    const prompt = `
-Receitas: ${totalReceber}
-Despesas: ${totalPagar}
-
-Analise os dados e dê recomendações financeiras.
-`;
-
-    const response = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "llama3-70b-8192",
-          messages: [
-            { role: "system", content: "Consultor financeiro empresarial." },
-            { role: "user", content: prompt }
-          ]
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    res.json({
-      analysis: data.choices?.[0]?.message?.content || "Sem análise"
-    });
-
-  } catch {
-
-    res.status(500).json({ error: "Erro IA" });
-
-  }
+  res.json({
+    status: sub?.status || "pending"
+  });
 
 });
 
@@ -470,7 +322,7 @@ app.post("/subscription/create", auth, async (req, res) => {
 });
 
 // =======================================================================
-// WEBHOOK
+// WEBHOOK MERCADO PAGO
 // =======================================================================
 
 app.post("/webhook/mercadopago", async (req, res) => {
@@ -506,8 +358,14 @@ app.post("/webhook/mercadopago", async (req, res) => {
 });
 
 // =======================================================================
-// ADMIN
+// ADMIN PROTEGIDO
 // =======================================================================
+
+app.get("/admin-dashboard.html", auth, adminOnly, (req, res) => {
+
+  res.sendFile(path.join(PUBLIC_DIR, "admin-dashboard.html"));
+
+});
 
 app.get("/admin/stats", auth, adminOnly, async (req, res) => {
 
