@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — CLIENTE (ERP ALDRA ESTÁVEL)
+// dashboard.js — CLIENTE (ALDRA FINAL)
 // ==========================================
 
 console.log("🚀 Dashboard Aldra carregado");
@@ -33,22 +33,13 @@ let isAdmin = false;
 // ==========================================
 
 async function safeJson(res){
-
 try{
-
 const text = await res.text();
-
-if(!text || text.trim().startsWith("<"))
-return {};
-
+if(!text || text.trim().startsWith("<")) return {};
 return JSON.parse(text);
-
 }catch{
-
 return {};
-
 }
-
 }
 
 
@@ -61,50 +52,66 @@ async function checkUser(){
 try{
 
 const res = await fetch("/auth/me",{
-headers:{
-Authorization:"Bearer "+token
-}
+headers:{ Authorization:"Bearer "+token }
 });
 
 if(res.status === 401){
-
 logout();
 return;
-
 }
 
 const data = await safeJson(res);
 
-console.log("Usuário:",data.email);
-console.log("Assinatura:",data.subscription_status);
-
 // ADMIN
-
 if(data.is_admin){
-
 isAdmin = true;
-
-if(adminBtn)
-adminBtn.style.display="inline-block";
-
+if(adminBtn) adminBtn.style.display="inline-block";
 }
 
 // ASSINATURA
-
 if(data.subscription_status === "active"){
-
 hideAlert();
-
 }else{
-
 showAlert();
-
 }
 
 }catch(err){
-
 console.error("Erro usuário:",err);
 showAlert();
+}
+
+}
+
+
+// ==========================================
+// VERIFICAR PAGAMENTO REAL (NOVO)
+// ==========================================
+
+async function checkPaymentStatus(){
+
+try{
+
+const res = await fetch("/subscription/status",{
+headers:{ Authorization:"Bearer "+token }
+});
+
+const data = await res.json();
+
+if(data.status === "active"){
+
+hideAlert();
+alert("✅ Pagamento confirmado! Ferramentas liberadas.");
+
+return true;
+
+}
+
+return false;
+
+}catch(err){
+
+console.error("Erro pagamento:",err);
+return false;
 
 }
 
@@ -116,26 +123,15 @@ showAlert();
 // ==========================================
 
 function showAlert(){
-
 subscriptionActive = false;
-
-if(alertBox)
-alertBox.style.display="block";
-
+if(alertBox) alertBox.style.display="block";
 }
 
 function hideAlert(){
-
 subscriptionActive = true;
-
-if(alertBox)
-alertBox.style.display="none";
-
-if(pixBox)
-pixBox.style.display="none";
-
+if(alertBox) alertBox.style.display="none";
+if(pixBox) pixBox.style.display="none";
 console.log("✅ Assinatura ativa");
-
 }
 
 
@@ -150,10 +146,8 @@ data?.point_of_interaction?.transaction_data ||
 data?.transaction_data;
 
 if(!pixData){
-
 alert("Erro ao gerar PIX.");
 return;
-
 }
 
 if(pixData.qr_code_base64 && pixQr)
@@ -176,28 +170,23 @@ window.ativarPlano = async function(){
 
 try{
 
-if(pixBox)
-pixBox.style.display="none";
+if(pixBox) pixBox.style.display="none";
 
 const res = await fetch("/subscription/create",{
 method:"POST",
-headers:{
-Authorization:"Bearer "+token
-}
+headers:{ Authorization:"Bearer "+token }
 });
 
 if(!res.ok){
-
 alert("Erro ao criar pagamento.");
 return;
-
 }
 
 const data = await safeJson(res);
 
 renderPix(data);
 
-// verifica pagamento automaticamente
+// 🔥 inicia verificação REAL
 startPaymentCheck();
 
 }catch(err){
@@ -211,7 +200,7 @@ alert("Erro ao criar pagamento.");
 
 
 // ==========================================
-// VERIFICAR PAGAMENTO PIX
+// LOOP DE VERIFICAÇÃO DE PAGAMENTO (CORRIGIDO)
 // ==========================================
 
 function startPaymentCheck(){
@@ -222,15 +211,13 @@ const interval = setInterval(async ()=>{
 
 tries++;
 
-await checkUser();
+const pago = await checkPaymentStatus();
 
-if(subscriptionActive || tries > 30){
-
+if(pago || tries > 30){
 clearInterval(interval);
-
 }
 
-},5000);
+},4000);
 
 }
 
@@ -240,7 +227,6 @@ clearInterval(interval);
 // ==========================================
 
 const sections=[
-
 "sectionPDF",
 "sectionContrato",
 "sectionCobranca",
@@ -252,20 +238,13 @@ const sections=[
 "sectionFiscal",
 "sectionCertidoes",
 "sectionAdmin"
-
 ];
 
 function hideAllSections(){
-
 sections.forEach(id=>{
-
 const el=document.getElementById(id);
-
-if(el)
-el.classList.remove("active");
-
+if(el) el.classList.remove("active");
 });
-
 }
 
 
@@ -276,25 +255,20 @@ el.classList.remove("active");
 function showSection(name){
 
 if(!subscriptionActive){
-
 alert("⚠️ Sua assinatura está inativa.");
 return;
-
 }
 
 if(name==="Admin" && !isAdmin){
-
 alert("🚫 Acesso restrito ao administrador.");
 return;
-
 }
 
 hideAllSections();
 
 const el=document.getElementById("section"+name);
 
-if(el)
-el.classList.add("active");
+if(el) el.classList.add("active");
 
 if(name==="CRM") loadClients();
 if(name==="Estoque") loadProdutos();
@@ -314,36 +288,27 @@ async function loadClients(){
 try{
 
 const res = await fetch("/crm",{
-headers:{
-Authorization:"Bearer "+token
-}
+headers:{ Authorization:"Bearer "+token }
 });
 
 const data = await safeJson(res);
 
-if(!crmLista || !Array.isArray(data))
-return;
+if(!crmLista || !Array.isArray(data)) return;
 
 crmLista.innerHTML="";
 
 data.forEach(client=>{
-
 const row=document.createElement("tr");
-
 row.innerHTML=`
 <td>${client.name||""}</td>
 <td>${client.email||""}</td>
 <td>${client.phone||""}</td>
 `;
-
 crmLista.appendChild(row);
-
 });
 
 }catch(err){
-
 console.error("Erro CRM:",err);
-
 }
 
 }
@@ -359,8 +324,7 @@ const nome=document.getElementById("crmNome").value;
 const email=document.getElementById("crmEmail").value;
 const telefone=document.getElementById("crmTelefone").value;
 
-if(!nome)
-return alert("Informe o nome.");
+if(!nome) return alert("Informe o nome.");
 
 try{
 
@@ -370,19 +334,13 @@ headers:{
 "Content-Type":"application/json",
 Authorization:"Bearer "+token
 },
-body:JSON.stringify({
-name:nome,
-email,
-phone:telefone
-})
+body:JSON.stringify({ name:nome, email, phone:telefone })
 });
 
 loadClients();
 
 }catch(err){
-
 console.error(err);
-
 }
 
 };
@@ -397,37 +355,28 @@ async function loadProdutos(){
 try{
 
 const res=await fetch("/products",{
-headers:{
-Authorization:"Bearer "+token
-}
+headers:{ Authorization:"Bearer "+token }
 });
 
 const data=await safeJson(res);
 
-if(!estoqueLista)
-return;
+if(!estoqueLista) return;
 
 estoqueLista.innerHTML="";
 
 data.forEach(p=>{
-
 const row=document.createElement("tr");
-
 row.innerHTML=`
 <td>${p.name}</td>
 <td>${p.sku}</td>
 <td>${p.quantity}</td>
 <td>${p.price}</td>
 `;
-
 estoqueLista.appendChild(row);
-
 });
 
 }catch(err){
-
 console.error(err);
-
 }
 
 }
@@ -442,37 +391,28 @@ async function loadFinanceiro(){
 try{
 
 const res=await fetch("/finance/accounts",{
-headers:{
-Authorization:"Bearer "+token
-}
+headers:{ Authorization:"Bearer "+token }
 });
 
 const data=await safeJson(res);
 
-if(!financeiroLista)
-return;
+if(!financeiroLista) return;
 
 financeiroLista.innerHTML="";
 
 data.forEach(conta=>{
-
 const row=document.createElement("tr");
-
 row.innerHTML=`
 <td>${conta.description}</td>
 <td>${conta.type}</td>
 <td>${conta.value}</td>
 <td>${conta.status}</td>
 `;
-
 financeiroLista.appendChild(row);
-
 });
 
 }catch(err){
-
 console.error(err);
-
 }
 
 }
@@ -483,11 +423,8 @@ console.error(err);
 // ==========================================
 
 window.logout=function(){
-
 localStorage.removeItem("token");
-
 window.location.href="/";
-
 };
 
 
@@ -499,7 +436,7 @@ async function init(){
 
 await checkUser();
 
-// verifica assinatura a cada 30s (não 4s)
+// verificação leve
 setInterval(checkUser,30000);
 
 showSection("PDF");

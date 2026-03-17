@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (ERP + IA GROQ COMPLETO ESTÁVEL)
+// Aldra — server.js (VERSÃO FINAL ESTÁVEL)
 // =======================================================================
 
 import express from "express";
@@ -202,7 +202,7 @@ app.post("/auth/login", async (req, res) => {
   const token = jwt.sign(
     { id: user.id },
     process.env.JWT_SECRET,
-    { expiresIn: "7d" }
+    { expiresIn: "30d" }
   );
 
   res.json({
@@ -216,7 +216,26 @@ app.post("/auth/login", async (req, res) => {
 });
 
 // =======================================================================
-// PIX ASSINATURA
+// AUTH ME (ESSENCIAL)
+// =======================================================================
+
+app.get("/auth/me", auth, async (req, res) => {
+
+  const sub = await dbGet(
+    `SELECT status FROM subscriptions WHERE user_id=?`,
+    [req.user.id]
+  );
+
+  res.json({
+    email: req.user.email,
+    is_admin: req.user.is_admin,
+    subscription_status: sub?.status || "pending"
+  });
+
+});
+
+// =======================================================================
+// CRIAR PIX
 // =======================================================================
 
 app.post("/subscription/create", auth, async (req, res) => {
@@ -250,7 +269,47 @@ app.post("/subscription/create", auth, async (req, res) => {
 });
 
 // =======================================================================
-// WEBHOOK MERCADO PAGO
+// VERIFICAR STATUS PAGAMENTO (ESSENCIAL)
+// =======================================================================
+
+app.get("/subscription/status", auth, async (req, res) => {
+
+  try {
+
+    const sub = await dbGet(
+      `SELECT payment_id,status FROM subscriptions WHERE user_id=?`,
+      [req.user.id]
+    );
+
+    if (!sub?.payment_id)
+      return res.json({ status: sub?.status || "pending" });
+
+    const paymentData = await payment.get({ id: sub.payment_id });
+
+    if (paymentData.status === "approved") {
+
+      await dbRun(
+        `UPDATE subscriptions SET status='active' WHERE user_id=?`,
+        [req.user.id]
+      );
+
+      return res.json({ status: "active" });
+
+    }
+
+    res.json({ status: sub.status });
+
+  } catch (err) {
+
+    console.error(err);
+    res.json({ status: "pending" });
+
+  }
+
+});
+
+// =======================================================================
+// WEBHOOK
 // =======================================================================
 
 app.post("/webhook/mercadopago", async (req, res) => {
@@ -282,72 +341,6 @@ app.post("/webhook/mercadopago", async (req, res) => {
     res.sendStatus(500);
 
   }
-
-});
-
-// =======================================================================
-// ADMIN MÉTRICAS
-// =======================================================================
-
-app.get("/admin/metrics", auth, adminOnly, async (req, res) => {
-
-  const users = await dbGet(`SELECT COUNT(*) as total FROM users`);
-
-  const active = await dbGet(
-    `SELECT COUNT(*) as total FROM subscriptions WHERE status='active'`
-  );
-
-  const pending = await dbGet(
-    `SELECT COUNT(*) as total FROM subscriptions WHERE status='pending'`
-  );
-
-  const revenue = active.total * PLAN_PRICE;
-
-  res.json({
-    users: users.total,
-    active: active.total,
-    pending: pending.total,
-    revenue
-  });
-
-});
-
-// =======================================================================
-// ADMIN LISTAR USUÁRIOS
-// =======================================================================
-
-app.get("/admin/users", auth, adminOnly, async (req, res) => {
-
-  const users = await dbAll(`
-    SELECT
-      users.id,
-      users.name,
-      users.email,
-      subscriptions.status
-    FROM users
-    LEFT JOIN subscriptions
-    ON users.id = subscriptions.user_id
-    ORDER BY users.created_at DESC
-  `);
-
-  res.json(users);
-
-});
-
-// =======================================================================
-// ADMIN APROVAR MANUAL
-// =======================================================================
-
-app.post("/admin/approve/:id", auth, adminOnly, async (req, res) => {
-
-  const id = req.params.id;
-
-  await dbRun(
-    `UPDATE subscriptions SET status='active' WHERE user_id=?`,
-    [id]
-  );
-
-  res.json({ success: true });
 
 });
 
