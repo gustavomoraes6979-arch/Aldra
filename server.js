@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (VERSÃO FINAL FUNCIONANDO NO RENDER)
+// Aldra — server.js (VERSÃO FINAL ESTÁVEL)
 // =======================================================================
 
 import express from "express";
@@ -9,7 +9,7 @@ import dotenv from "dotenv";
 import sqlite3 from "sqlite3";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import mercadopago from "mercadopago";
+import { MercadoPagoConfig, Payment } from "mercadopago";
 import { fileURLToPath } from "url";
 
 dotenv.config();
@@ -24,12 +24,11 @@ const PLAN_PRICE = 1;
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
 if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
 
-// 🔥 IMPORT CORRIGIDO
-const client = new mercadopago.MercadoPagoConfig({
+const mpClient = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN.trim(),
 });
 
-const payment = new mercadopago.Payment(client);
+const payment = new Payment(mpClient);
 
 // =======================================================================
 // PATH
@@ -69,6 +68,15 @@ function dbGet(query, params = []) {
     db.get(query, params, (err, row) => {
       if (err) reject(err);
       else resolve(row);
+    });
+  });
+}
+
+function dbAll(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(query, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
     });
   });
 }
@@ -130,8 +138,85 @@ async function auth(req, res, next) {
 
 }
 
+function adminOnly(req, res, next) {
+
+  if (!req.user?.is_admin)
+    return res.status(403).json({ error: "Admin apenas" });
+
+  next();
+
+}
+
 // =======================================================================
-// AUTH ME
+// REGISTER
+// =======================================================================
+
+app.post("/auth/register", async (req, res) => {
+
+  try {
+
+    const { name, email, password } = req.body;
+
+    const hash = bcrypt.hashSync(password, 10);
+
+    const result = await dbRun(
+      `INSERT INTO users(name,email,password) VALUES(?,?,?)`,
+      [name, email.toLowerCase(), hash]
+    );
+
+    await dbRun(
+      `INSERT INTO subscriptions(user_id,status)
+       VALUES(?, 'pending')`,
+      [result.lastID]
+    );
+
+    res.json({ success: true });
+
+  } catch {
+
+    res.status(400).json({ error: "Email já existe" });
+
+  }
+
+});
+
+// =======================================================================
+// LOGIN
+// =======================================================================
+
+app.post("/auth/login", async (req, res) => {
+
+  const { email, password } = req.body;
+
+  const user = await dbGet(
+    `SELECT * FROM users WHERE email=?`,
+    [email.toLowerCase()]
+  );
+
+  if (!user)
+    return res.status(404).json({ error: "Usuário não encontrado" });
+
+  if (!bcrypt.compareSync(password, user.password))
+    return res.status(401).json({ error: "Senha incorreta" });
+
+  const token = jwt.sign(
+    { id: user.id },
+    process.env.JWT_SECRET,
+    { expiresIn: "30d" }
+  );
+
+  res.json({
+    token,
+    redirect:
+      user.email === ADMIN_EMAIL
+        ? "/admin-dashboard.html"
+        : "/dashboard.html",
+  });
+
+});
+
+// =======================================================================
+// AUTH ME (ESSENCIAL)
 // =======================================================================
 
 app.get("/auth/me", auth, async (req, res) => {
@@ -166,8 +251,6 @@ app.post("/subscription/create", auth, async (req, res) => {
       }
     });
 
-    console.log("PIX criado ID:", result.id);
-
     await dbRun(
       `UPDATE subscriptions
        SET payment_id=?, status='pending'
@@ -177,9 +260,8 @@ app.post("/subscription/create", auth, async (req, res) => {
 
     res.json(result);
 
-  } catch (err) {
+  } catch {
 
-    console.error("Erro ao criar PIX:", err);
     res.status(500).json({ error: "Erro PIX" });
 
   }
@@ -187,7 +269,7 @@ app.post("/subscription/create", auth, async (req, res) => {
 });
 
 // =======================================================================
-// STATUS
+// VERIFICAR STATUS PAGAMENTO (ESSENCIAL)
 // =======================================================================
 
 app.get("/subscription/status", auth, async (req, res) => {
@@ -204,30 +286,23 @@ app.get("/subscription/status", auth, async (req, res) => {
 
     const paymentData = await payment.get({ id: sub.payment_id });
 
-    console.log("STATUS MP:", paymentData.status);
-
-    if (
-      paymentData.status === "approved" ||
-      paymentData.status === "authorized"
-    ) {
+    if (paymentData.status === "approved") {
 
       await dbRun(
         `UPDATE subscriptions SET status='active' WHERE user_id=?`,
         [req.user.id]
       );
 
-      console.log("✅ ASSINATURA ATIVADA");
-
       return res.json({ status: "active" });
 
     }
 
-    return res.json({ status: "pending" });
+    res.json({ status: sub.status });
 
   } catch (err) {
 
-    console.error("Erro ao verificar pagamento:", err);
-    return res.json({ status: "pending" });
+    console.error(err);
+    res.json({ status: "pending" });
 
   }
 
@@ -248,12 +323,7 @@ app.post("/webhook/mercadopago", async (req, res) => {
 
     const paymentData = await payment.get({ id: paymentId });
 
-    console.log("WEBHOOK STATUS:", paymentData.status);
-
-    if (
-      paymentData.status === "approved" ||
-      paymentData.status === "authorized"
-    ) {
+    if (paymentData.status === "approved") {
 
       await dbRun(
         `UPDATE subscriptions
@@ -262,15 +332,12 @@ app.post("/webhook/mercadopago", async (req, res) => {
         [paymentId]
       );
 
-      console.log("✅ ATIVADO VIA WEBHOOK");
-
     }
 
     res.sendStatus(200);
 
-  } catch (err) {
+  } catch {
 
-    console.error("Erro webhook:", err);
     res.sendStatus(500);
 
   }
@@ -290,5 +357,5 @@ app.get("/*", (_, res) =>
 // =======================================================================
 
 app.listen(PORT, () =>
-  console.log(`🚀 Aldra rodando na porta ${PORT}`)
+  console.log(`🚀 Aldra ERP rodando na porta ${PORT}`)
 );
