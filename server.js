@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (VERSÃO FINAL ESTÁVEL)
+// Aldra — server.js (VERSÃO FINAL CORRIGIDA)
 // =======================================================================
 
 import express from "express";
@@ -72,15 +72,6 @@ function dbGet(query, params = []) {
   });
 }
 
-function dbAll(query, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(query, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
-}
-
 db.serialize(() => {
 
   db.run(`
@@ -138,85 +129,8 @@ async function auth(req, res, next) {
 
 }
 
-function adminOnly(req, res, next) {
-
-  if (!req.user?.is_admin)
-    return res.status(403).json({ error: "Admin apenas" });
-
-  next();
-
-}
-
 // =======================================================================
-// REGISTER
-// =======================================================================
-
-app.post("/auth/register", async (req, res) => {
-
-  try {
-
-    const { name, email, password } = req.body;
-
-    const hash = bcrypt.hashSync(password, 10);
-
-    const result = await dbRun(
-      `INSERT INTO users(name,email,password) VALUES(?,?,?)`,
-      [name, email.toLowerCase(), hash]
-    );
-
-    await dbRun(
-      `INSERT INTO subscriptions(user_id,status)
-       VALUES(?, 'pending')`,
-      [result.lastID]
-    );
-
-    res.json({ success: true });
-
-  } catch {
-
-    res.status(400).json({ error: "Email já existe" });
-
-  }
-
-});
-
-// =======================================================================
-// LOGIN
-// =======================================================================
-
-app.post("/auth/login", async (req, res) => {
-
-  const { email, password } = req.body;
-
-  const user = await dbGet(
-    `SELECT * FROM users WHERE email=?`,
-    [email.toLowerCase()]
-  );
-
-  if (!user)
-    return res.status(404).json({ error: "Usuário não encontrado" });
-
-  if (!bcrypt.compareSync(password, user.password))
-    return res.status(401).json({ error: "Senha incorreta" });
-
-  const token = jwt.sign(
-    { id: user.id },
-    process.env.JWT_SECRET,
-    { expiresIn: "30d" }
-  );
-
-  res.json({
-    token,
-    redirect:
-      user.email === ADMIN_EMAIL
-        ? "/admin-dashboard.html"
-        : "/dashboard.html",
-  });
-
-});
-
-// =======================================================================
-// AUTH ME (ESSENCIAL)
+// AUTH ME
 // =======================================================================
 
 app.get("/auth/me", auth, async (req, res) => {
@@ -251,6 +165,8 @@ app.post("/subscription/create", auth, async (req, res) => {
       }
     });
 
+    console.log("PIX criado ID:", result.id);
+
     await dbRun(
       `UPDATE subscriptions
        SET payment_id=?, status='pending'
@@ -260,8 +176,9 @@ app.post("/subscription/create", auth, async (req, res) => {
 
     res.json(result);
 
-  } catch {
+  } catch (err) {
 
+    console.error("Erro ao criar PIX:", err);
     res.status(500).json({ error: "Erro PIX" });
 
   }
@@ -269,7 +186,7 @@ app.post("/subscription/create", auth, async (req, res) => {
 });
 
 // =======================================================================
-// VERIFICAR STATUS PAGAMENTO (ESSENCIAL)
+// STATUS (CORRIGIDO)
 // =======================================================================
 
 app.get("/subscription/status", auth, async (req, res) => {
@@ -284,32 +201,43 @@ app.get("/subscription/status", auth, async (req, res) => {
     if (!sub?.payment_id)
       return res.json({ status: sub?.status || "pending" });
 
+    console.log("🔎 PAYMENT ID:", sub.payment_id);
+
     const paymentData = await payment.get({ id: sub.payment_id });
 
-    if (paymentData.status === "approved") {
+    console.log("💰 STATUS MP:", paymentData.status);
+
+    // 🔥 ACEITA MAIS STATUS
+    if (
+      paymentData.status === "approved" ||
+      paymentData.status === "authorized"
+    ) {
 
       await dbRun(
         `UPDATE subscriptions SET status='active' WHERE user_id=?`,
         [req.user.id]
       );
 
+      console.log("✅ ASSINATURA ATIVADA");
+
       return res.json({ status: "active" });
 
     }
 
-    res.json({ status: sub.status });
+    return res.json({ status: "pending" });
 
   } catch (err) {
 
-    console.error(err);
-    res.json({ status: "pending" });
+    console.error("Erro ao verificar pagamento:", err);
+
+    return res.json({ status: "pending" });
 
   }
 
 });
 
 // =======================================================================
-// WEBHOOK
+// WEBHOOK MELHORADO
 // =======================================================================
 
 app.post("/webhook/mercadopago", async (req, res) => {
@@ -323,7 +251,12 @@ app.post("/webhook/mercadopago", async (req, res) => {
 
     const paymentData = await payment.get({ id: paymentId });
 
-    if (paymentData.status === "approved") {
+    console.log("🔔 WEBHOOK STATUS:", paymentData.status);
+
+    if (
+      paymentData.status === "approved" ||
+      paymentData.status === "authorized"
+    ) {
 
       await dbRun(
         `UPDATE subscriptions
@@ -332,12 +265,15 @@ app.post("/webhook/mercadopago", async (req, res) => {
         [paymentId]
       );
 
+      console.log("✅ ATIVADO VIA WEBHOOK");
+
     }
 
     res.sendStatus(200);
 
-  } catch {
+  } catch (err) {
 
+    console.error("Erro webhook:", err);
     res.sendStatus(500);
 
   }
@@ -357,5 +293,5 @@ app.get("/*", (_, res) =>
 // =======================================================================
 
 app.listen(PORT, () =>
-  console.log(`🚀 Aldra ERP rodando na porta ${PORT}`)
+  console.log(`🚀 Aldra rodando na porta ${PORT}`)
 );
