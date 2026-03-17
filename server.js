@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (VERSÃO FINAL CORRIGIDA)
+// Aldra — server.js (VERSÃO FINAL FUNCIONANDO NO RENDER)
 // =======================================================================
 
 import express from "express";
@@ -9,7 +9,7 @@ import dotenv from "dotenv";
 import sqlite3 from "sqlite3";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { MercadoPagoConfig, Payment } from "mercadopago";
+import mercadopago from "mercadopago";
 import { fileURLToPath } from "url";
 
 dotenv.config();
@@ -24,11 +24,12 @@ const PLAN_PRICE = 1;
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET não definido");
 if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN não definido");
 
-const mpClient = new MercadoPagoConfig({
+// 🔥 IMPORT CORRIGIDO
+const client = new mercadopago.MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN.trim(),
 });
 
-const payment = new Payment(mpClient);
+const payment = new mercadopago.Payment(client);
 
 // =======================================================================
 // PATH
@@ -186,7 +187,7 @@ app.post("/subscription/create", auth, async (req, res) => {
 });
 
 // =======================================================================
-// STATUS (CORRIGIDO)
+// STATUS
 // =======================================================================
 
 app.get("/subscription/status", auth, async (req, res) => {
@@ -201,13 +202,10 @@ app.get("/subscription/status", auth, async (req, res) => {
     if (!sub?.payment_id)
       return res.json({ status: sub?.status || "pending" });
 
-    console.log("🔎 PAYMENT ID:", sub.payment_id);
-
     const paymentData = await payment.get({ id: sub.payment_id });
 
-    console.log("💰 STATUS MP:", paymentData.status);
+    console.log("STATUS MP:", paymentData.status);
 
-    // 🔥 ACEITA MAIS STATUS
     if (
       paymentData.status === "approved" ||
       paymentData.status === "authorized"
@@ -229,7 +227,6 @@ app.get("/subscription/status", auth, async (req, res) => {
   } catch (err) {
 
     console.error("Erro ao verificar pagamento:", err);
-
     return res.json({ status: "pending" });
 
   }
@@ -237,7 +234,7 @@ app.get("/subscription/status", auth, async (req, res) => {
 });
 
 // =======================================================================
-// WEBHOOK MELHORADO
+// WEBHOOK
 // =======================================================================
 
 app.post("/webhook/mercadopago", async (req, res) => {
@@ -251,7 +248,7 @@ app.post("/webhook/mercadopago", async (req, res) => {
 
     const paymentData = await payment.get({ id: paymentId });
 
-    console.log("🔔 WEBHOOK STATUS:", paymentData.status);
+    console.log("WEBHOOK STATUS:", paymentData.status);
 
     if (
       paymentData.status === "approved" ||
