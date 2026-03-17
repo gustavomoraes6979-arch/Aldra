@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — CLIENTE (ERP ALDRA COMPLETO)
+// dashboard.js — CLIENTE (ERP ALDRA ESTÁVEL)
 // ==========================================
 
 console.log("🚀 Dashboard Aldra carregado");
@@ -32,18 +32,18 @@ let isAdmin = false;
 // SAFE JSON
 // ==========================================
 
-async function safeJson(res) {
+async function safeJson(res){
 
-try {
+try{
 
 const text = await res.text();
 
-if (!text || text.trim().startsWith("<"))
+if(!text || text.trim().startsWith("<"))
 return {};
 
 return JSON.parse(text);
 
-} catch {
+}catch{
 
 return {};
 
@@ -53,50 +53,57 @@ return {};
 
 
 // ==========================================
-// VERIFICAR USUÁRIO + ASSINATURA
+// VERIFICAR USUÁRIO
 // ==========================================
 
-async function checkUser() {
+async function checkUser(){
 
-try {
+try{
 
-const res = await fetch("/auth/me", {
-headers: {
-Authorization: "Bearer " + token
+const res = await fetch("/auth/me",{
+headers:{
+Authorization:"Bearer "+token
 }
 });
 
+if(res.status === 401){
+
+logout();
+return;
+
+}
+
 const data = await safeJson(res);
 
-console.log("Usuário:", data.email);
-console.log("Status assinatura:", data.subscription_status);
+console.log("Usuário:",data.email);
+console.log("Assinatura:",data.subscription_status);
 
 // ADMIN
 
-if (data.is_admin) {
+if(data.is_admin){
 
 isAdmin = true;
 
-if (adminBtn)
-adminBtn.style.display = "inline-block";
+if(adminBtn)
+adminBtn.style.display="inline-block";
 
 }
 
 // ASSINATURA
 
-if (data.subscription_status === "active") {
+if(data.subscription_status === "active"){
 
 hideAlert();
 
-} else {
+}else{
 
 showAlert();
 
 }
 
-} catch (err) {
+}catch(err){
 
-console.error("Erro ao verificar usuário:", err);
+console.error("Erro usuário:",err);
 showAlert();
 
 }
@@ -108,24 +115,24 @@ showAlert();
 // ALERTA ASSINATURA
 // ==========================================
 
-function showAlert() {
+function showAlert(){
 
 subscriptionActive = false;
 
-if (alertBox)
-alertBox.style.display = "block";
+if(alertBox)
+alertBox.style.display="block";
 
 }
 
-function hideAlert() {
+function hideAlert(){
 
 subscriptionActive = true;
 
-if (alertBox)
-alertBox.style.display = "none";
+if(alertBox)
+alertBox.style.display="none";
 
-if (pixBox)
-pixBox.style.display = "none";
+if(pixBox)
+pixBox.style.display="none";
 
 console.log("✅ Assinatura ativa");
 
@@ -136,25 +143,27 @@ console.log("✅ Assinatura ativa");
 // RENDER PIX
 // ==========================================
 
-function renderPix(data) {
+function renderPix(data){
 
 const pixData =
 data?.point_of_interaction?.transaction_data ||
 data?.transaction_data;
 
-if (!pixData) {
+if(!pixData){
+
 alert("Erro ao gerar PIX.");
 return;
+
 }
 
-if (pixData.qr_code_base64 && pixQr)
+if(pixData.qr_code_base64 && pixQr)
 pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
 
-if (pixData.qr_code && pixCopiaCola)
+if(pixData.qr_code && pixCopiaCola)
 pixCopiaCola.value = pixData.qr_code;
 
-if (pixBox)
-pixBox.style.display = "block";
+if(pixBox)
+pixBox.style.display="block";
 
 }
 
@@ -163,30 +172,35 @@ pixBox.style.display = "block";
 // CRIAR PIX
 // ==========================================
 
-window.ativarPlano = async function () {
+window.ativarPlano = async function(){
 
-try {
+try{
 
-if (pixBox)
-pixBox.style.display = "none";
+if(pixBox)
+pixBox.style.display="none";
 
-const res = await fetch("/subscription/create", {
-method: "POST",
-headers: {
-Authorization: "Bearer " + token
+const res = await fetch("/subscription/create",{
+method:"POST",
+headers:{
+Authorization:"Bearer "+token
 }
 });
 
-if (!res.ok) {
+if(!res.ok){
+
 alert("Erro ao criar pagamento.");
 return;
+
 }
 
 const data = await safeJson(res);
 
 renderPix(data);
 
-} catch (err) {
+// verifica pagamento automaticamente
+startPaymentCheck();
+
+}catch(err){
 
 console.error(err);
 alert("Erro ao criar pagamento.");
@@ -197,10 +211,35 @@ alert("Erro ao criar pagamento.");
 
 
 // ==========================================
+// VERIFICAR PAGAMENTO PIX
+// ==========================================
+
+function startPaymentCheck(){
+
+let tries = 0;
+
+const interval = setInterval(async ()=>{
+
+tries++;
+
+await checkUser();
+
+if(subscriptionActive || tries > 30){
+
+clearInterval(interval);
+
+}
+
+},5000);
+
+}
+
+
+// ==========================================
 // SEÇÕES
 // ==========================================
 
-const sections = [
+const sections=[
 
 "sectionPDF",
 "sectionContrato",
@@ -216,13 +255,13 @@ const sections = [
 
 ];
 
-function hideAllSections() {
+function hideAllSections(){
 
-sections.forEach(id => {
+sections.forEach(id=>{
 
-const el = document.getElementById(id);
+const el=document.getElementById(id);
 
-if (el)
+if(el)
 el.classList.remove("active");
 
 });
@@ -234,16 +273,16 @@ el.classList.remove("active");
 // MOSTRAR SEÇÃO
 // ==========================================
 
-function showSection(name) {
+function showSection(name){
 
-if (!subscriptionActive) {
+if(!subscriptionActive){
 
 alert("⚠️ Sua assinatura está inativa.");
 return;
 
 }
 
-if (name === "Admin" && !isAdmin) {
+if(name==="Admin" && !isAdmin){
 
 alert("🚫 Acesso restrito ao administrador.");
 return;
@@ -252,14 +291,14 @@ return;
 
 hideAllSections();
 
-const el = document.getElementById("section" + name);
+const el=document.getElementById("section"+name);
 
-if (el)
+if(el)
 el.classList.add("active");
 
-if (name === "CRM") loadClients();
-if (name === "Estoque") loadProdutos();
-if (name === "Financeiro") loadFinanceiro();
+if(name==="CRM") loadClients();
+if(name==="Estoque") loadProdutos();
+if(name==="Financeiro") loadFinanceiro();
 
 }
 
@@ -270,40 +309,40 @@ window.showSection = showSection;
 // CRM
 // ==========================================
 
-async function loadClients() {
+async function loadClients(){
 
-try {
+try{
 
-const res = await fetch("/crm", {
-headers: {
-Authorization: "Bearer " + token
+const res = await fetch("/crm",{
+headers:{
+Authorization:"Bearer "+token
 }
 });
 
 const data = await safeJson(res);
 
-if (!crmLista || !Array.isArray(data))
+if(!crmLista || !Array.isArray(data))
 return;
 
-crmLista.innerHTML = "";
+crmLista.innerHTML="";
 
-data.forEach(client => {
+data.forEach(client=>{
 
-const row = document.createElement("tr");
+const row=document.createElement("tr");
 
-row.innerHTML = `
-<td>${client.name || ""}</td>
-<td>${client.email || ""}</td>
-<td>${client.phone || ""}</td>
+row.innerHTML=`
+<td>${client.name||""}</td>
+<td>${client.email||""}</td>
+<td>${client.phone||""}</td>
 `;
 
 crmLista.appendChild(row);
 
 });
 
-} catch (err) {
+}catch(err){
 
-console.error("Erro CRM:", err);
+console.error("Erro CRM:",err);
 
 }
 
@@ -314,33 +353,33 @@ console.error("Erro CRM:", err);
 // SALVAR CLIENTE
 // ==========================================
 
-window.salvarCliente = async function () {
+window.salvarCliente = async function(){
 
-const nome = document.getElementById("crmNome").value;
-const email = document.getElementById("crmEmail").value;
-const telefone = document.getElementById("crmTelefone").value;
+const nome=document.getElementById("crmNome").value;
+const email=document.getElementById("crmEmail").value;
+const telefone=document.getElementById("crmTelefone").value;
 
-if (!nome)
+if(!nome)
 return alert("Informe o nome.");
 
-try {
+try{
 
-await fetch("/crm", {
-method: "POST",
-headers: {
-"Content-Type": "application/json",
-Authorization: "Bearer " + token
+await fetch("/crm",{
+method:"POST",
+headers:{
+"Content-Type":"application/json",
+Authorization:"Bearer "+token
 },
-body: JSON.stringify({
-name: nome,
+body:JSON.stringify({
+name:nome,
 email,
-phone: telefone
+phone:telefone
 })
 });
 
 loadClients();
 
-} catch (err) {
+}catch(err){
 
 console.error(err);
 
@@ -353,28 +392,28 @@ console.error(err);
 // ESTOQUE
 // ==========================================
 
-async function loadProdutos() {
+async function loadProdutos(){
 
-try {
+try{
 
-const res = await fetch("/products", {
-headers: {
-Authorization: "Bearer " + token
+const res=await fetch("/products",{
+headers:{
+Authorization:"Bearer "+token
 }
 });
 
-const data = await safeJson(res);
+const data=await safeJson(res);
 
-if (!estoqueLista)
+if(!estoqueLista)
 return;
 
-estoqueLista.innerHTML = "";
+estoqueLista.innerHTML="";
 
-data.forEach(p => {
+data.forEach(p=>{
 
-const row = document.createElement("tr");
+const row=document.createElement("tr");
 
-row.innerHTML = `
+row.innerHTML=`
 <td>${p.name}</td>
 <td>${p.sku}</td>
 <td>${p.quantity}</td>
@@ -385,7 +424,7 @@ estoqueLista.appendChild(row);
 
 });
 
-} catch (err) {
+}catch(err){
 
 console.error(err);
 
@@ -398,28 +437,28 @@ console.error(err);
 // FINANCEIRO
 // ==========================================
 
-async function loadFinanceiro() {
+async function loadFinanceiro(){
 
-try {
+try{
 
-const res = await fetch("/finance/accounts", {
-headers: {
-Authorization: "Bearer " + token
+const res=await fetch("/finance/accounts",{
+headers:{
+Authorization:"Bearer "+token
 }
 });
 
-const data = await safeJson(res);
+const data=await safeJson(res);
 
-if (!financeiroLista)
+if(!financeiroLista)
 return;
 
-financeiroLista.innerHTML = "";
+financeiroLista.innerHTML="";
 
-data.forEach(conta => {
+data.forEach(conta=>{
 
-const row = document.createElement("tr");
+const row=document.createElement("tr");
 
-row.innerHTML = `
+row.innerHTML=`
 <td>${conta.description}</td>
 <td>${conta.type}</td>
 <td>${conta.value}</td>
@@ -430,7 +469,7 @@ financeiroLista.appendChild(row);
 
 });
 
-} catch (err) {
+}catch(err){
 
 console.error(err);
 
@@ -443,11 +482,11 @@ console.error(err);
 // LOGOUT
 // ==========================================
 
-window.logout = function () {
+window.logout=function(){
 
 localStorage.removeItem("token");
 
-window.location.href = "/";
+window.location.href="/";
 
 };
 
@@ -456,12 +495,12 @@ window.location.href = "/";
 // INIT
 // ==========================================
 
-async function init() {
+async function init(){
 
 await checkUser();
 
-/* verifica assinatura automaticamente */
-setInterval(checkUser, 4000);
+// verifica assinatura a cada 30s (não 4s)
+setInterval(checkUser,30000);
 
 showSection("PDF");
 
