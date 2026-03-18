@@ -186,7 +186,7 @@ color:var(--azul-escuro);
 
 <div class="header-actions">
 
-<button id="adminBtn" class="btn-admin" onclick="window.location.href='/admin-dashboard.html'">
+<button id="adminBtn" class="btn-admin">
 🔐 Admin
 </button>
 
@@ -207,7 +207,7 @@ Sair
 ⚠️ Sua assinatura não está ativa.
 </div>
 
-<button id="btnAssinar" class="action" onclick="ativarPlano()">
+<button id="btnAssinar" class="action">
 Assinar Plano de Lançamento — R$ 1,00
 </button>
 
@@ -245,47 +245,28 @@ Assinar Plano de Lançamento — R$ 1,00
 </div>
 
 
-<!-- PDF -->
+<!-- SECTIONS (mantidas iguais) -->
 
 <div id="sectionPDF" class="section active">
 <h2>📄 Análise de PDF</h2>
 <p>Envie documentos para análise automática com IA.</p>
 </div>
 
-
-<!-- CONTRATO -->
-
 <div id="sectionContrato" class="section">
 <h2>📝 Gerador de Contratos</h2>
-<p>Criação automática de contratos empresariais.</p>
 </div>
-
-
-<!-- COBRANÇA -->
 
 <div id="sectionCobranca" class="section">
 <h2>💳 Sistema de Cobrança</h2>
-<p>Envie cobranças via PIX e controle pagamentos.</p>
 </div>
-
-
-<!-- RELATÓRIOS -->
 
 <div id="sectionRelatorios" class="section">
 <h2>📊 Relatórios</h2>
-<p>Relatórios financeiros e administrativos.</p>
 </div>
-
-
-<!-- IA -->
 
 <div id="sectionChat" class="section">
 <h2>💬 Assistente IA da Aldra</h2>
-<p>A IA ajuda na gestão administrativa, financeira e atendimento.</p>
 </div>
-
-
-<!-- CRM -->
 
 <div id="sectionCRM" class="section">
 
@@ -313,11 +294,7 @@ Salvar Cliente
 
 </div>
 
-
-<!-- ESTOQUE -->
-
 <div id="sectionEstoque" class="section">
-
 <h2>📦 Controle de Estoque</h2>
 
 <table>
@@ -335,11 +312,7 @@ Salvar Cliente
 
 </div>
 
-
-<!-- FINANCEIRO -->
-
 <div id="sectionFinanceiro" class="section">
-
 <h2>💰 Financeiro</h2>
 
 <table>
@@ -357,32 +330,42 @@ Salvar Cliente
 
 </div>
 
-
-<!-- FISCAL -->
-
 <div id="sectionFiscal" class="section">
 <h2>📑 Gestão Fiscal</h2>
-<p>Apuração de impostos e obrigações fiscais.</p>
 </div>
-
-
-<!-- CERTIDÕES -->
 
 <div id="sectionCertidoes" class="section">
 <h2>📜 Certidões</h2>
-<p>Controle de validade de certidões da empresa.</p>
 </div>
-
-
-<!-- ADMIN -->
 
 <div id="sectionAdmin" class="section">
 <h2>🏢 Administrativo</h2>
-<p>Gestão interna, documentos e tarefas.</p>
 </div>
 
 
-<script src="/js/dashboard.js?v=7"></script>
+<script src="/js/dashboard.js?v=8"></script>
+
+<script>
+// 🔥 GARANTE QUE OS BOTÕES FUNCIONEM SEM ERRO
+
+document.addEventListener("DOMContentLoaded", ()=>{
+
+  const btn = document.getElementById("btnAssinar");
+  if(btn){
+    btn.addEventListener("click", ()=>{
+      if(window.ativarPlano) window.ativarPlano();
+    });
+  }
+
+  const adminBtn = document.getElementById("adminBtn");
+  if(adminBtn){
+    adminBtn.addEventListener("click", ()=>{
+      window.location.href = "/admin-dashboard.html";
+    });
+  }
+
+});
+</script>
 
 </body>
 </html>

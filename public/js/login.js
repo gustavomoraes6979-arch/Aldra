@@ -1,5 +1,5 @@
 // =======================================
-// LOGIN.JS — ALDRA (VERSÃO PROFISSIONAL)
+// LOGIN.JS — ALDRA (FINAL ESTÁVEL)
 // =======================================
 
 // 🔥 Detecta ambiente automaticamente
@@ -9,24 +9,42 @@ const API_BASE =
     : "";
 
 // =======================================
-// FUNÇÃO SEGURA JSON
+// SAFE JSON
 // =======================================
 
 async function safeJson(res) {
   try {
-    return await res.json();
+    const text = await res.text();
+    if (!text || text.startsWith("<")) return null;
+    return JSON.parse(text);
   } catch {
     return null;
   }
 }
 
 // =======================================
-// AUTO LOGIN (IMPORTANTE)
+// 🔥 TOKEN HELPERS (NOVO)
+// =======================================
+
+function saveToken(token){
+  localStorage.setItem("token", token);
+}
+
+function getToken(){
+  return localStorage.getItem("token");
+}
+
+function removeToken(){
+  localStorage.removeItem("token");
+}
+
+// =======================================
+// 🔥 AUTO LOGIN MELHORADO
 // =======================================
 
 async function checkAutoLogin() {
 
-  const token = localStorage.getItem("token");
+  const token = getToken();
 
   if (!token) return;
 
@@ -38,13 +56,18 @@ async function checkAutoLogin() {
       }
     });
 
-    if (!res.ok) return;
+    if (!res.ok) {
+      // token inválido → remove
+      removeToken();
+      return;
+    }
 
-    const data = await res.json();
+    const data = await safeJson(res);
 
     if (data?.email) {
 
-      // usuário já logado
+      console.log("✅ Auto login realizado");
+
       window.location.href = "/dashboard.html";
 
     }
@@ -119,20 +142,25 @@ if (loginForm) {
 
       }
 
-      // =======================================
-      // SALVA TOKEN
-      // =======================================
+      if (!data.token) {
 
-      localStorage.setItem("token", data.token);
+        msg.textContent = "Token não recebido.";
+        msg.style.color = "red";
+        return;
+
+      }
+
+      // 🔥 SALVA TOKEN COM SEGURANÇA
+      saveToken(data.token);
+
+      console.log("🔐 Token salvo com sucesso");
 
       msg.textContent = "Login efetuado!";
       msg.style.color = "green";
 
       setTimeout(() => {
-
         window.location.href = "/dashboard.html";
-
-      }, 600);
+      }, 500);
 
     } catch (err) {
 
@@ -201,7 +229,7 @@ if (registerForm) {
 
       if (res.ok) {
 
-        regMsg.textContent = "Conta criada com sucesso! Agora faça o login.";
+        regMsg.textContent = "Conta criada com sucesso! Faça login.";
         regMsg.style.color = "green";
 
         if (document.getElementById("regName"))

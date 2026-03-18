@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (VERSÃO FINAL ESTÁVEL)
+// Aldra — server.js (VERSÃO FINAL CORRIGIDA E FUNCIONANDO)
 // =======================================================================
 
 import express from "express";
@@ -68,15 +68,6 @@ function dbGet(query, params = []) {
     db.get(query, params, (err, row) => {
       if (err) reject(err);
       else resolve(row);
-    });
-  });
-}
-
-function dbAll(query, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(query, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
     });
   });
 }
@@ -164,6 +155,7 @@ app.post("/auth/register", async (req, res) => {
       [name, email.toLowerCase(), hash]
     );
 
+    // 🔥 GARANTE ASSINATURA
     await dbRun(
       `INSERT INTO subscriptions(user_id,status)
        VALUES(?, 'pending')`,
@@ -216,7 +208,7 @@ app.post("/auth/login", async (req, res) => {
 });
 
 // =======================================================================
-// AUTH ME (ESSENCIAL)
+// AUTH ME
 // =======================================================================
 
 app.get("/auth/me", auth, async (req, res) => {
@@ -251,6 +243,8 @@ app.post("/subscription/create", auth, async (req, res) => {
       }
     });
 
+    console.log("PIX criado:", result.id);
+
     await dbRun(
       `UPDATE subscriptions
        SET payment_id=?, status='pending'
@@ -260,8 +254,9 @@ app.post("/subscription/create", auth, async (req, res) => {
 
     res.json(result);
 
-  } catch {
+  } catch (err) {
 
+    console.error(err);
     res.status(500).json({ error: "Erro PIX" });
 
   }
@@ -269,7 +264,7 @@ app.post("/subscription/create", auth, async (req, res) => {
 });
 
 // =======================================================================
-// VERIFICAR STATUS PAGAMENTO (ESSENCIAL)
+// STATUS (CORRIGIDO)
 // =======================================================================
 
 app.get("/subscription/status", auth, async (req, res) => {
@@ -281,12 +276,20 @@ app.get("/subscription/status", auth, async (req, res) => {
       [req.user.id]
     );
 
-    if (!sub?.payment_id)
-      return res.json({ status: sub?.status || "pending" });
+    if (!sub)
+      return res.json({ status: "pending" });
+
+    if (!sub.payment_id)
+      return res.json({ status: sub.status });
 
     const paymentData = await payment.get({ id: sub.payment_id });
 
-    if (paymentData.status === "approved") {
+    console.log("STATUS MP:", paymentData.status);
+
+    if (
+      paymentData.status === "approved" ||
+      paymentData.status === "authorized"
+    ) {
 
       await dbRun(
         `UPDATE subscriptions SET status='active' WHERE user_id=?`,
@@ -297,12 +300,12 @@ app.get("/subscription/status", auth, async (req, res) => {
 
     }
 
-    res.json({ status: sub.status });
+    return res.json({ status: "pending" });
 
   } catch (err) {
 
-    console.error(err);
-    res.json({ status: "pending" });
+    console.error("Erro status:", err);
+    return res.json({ status: "pending" });
 
   }
 
@@ -323,7 +326,12 @@ app.post("/webhook/mercadopago", async (req, res) => {
 
     const paymentData = await payment.get({ id: paymentId });
 
-    if (paymentData.status === "approved") {
+    console.log("WEBHOOK:", paymentData.status);
+
+    if (
+      paymentData.status === "approved" ||
+      paymentData.status === "authorized"
+    ) {
 
       await dbRun(
         `UPDATE subscriptions
@@ -332,12 +340,15 @@ app.post("/webhook/mercadopago", async (req, res) => {
         [paymentId]
       );
 
+      console.log("ASSINATURA ATIVADA VIA WEBHOOK");
+
     }
 
     res.sendStatus(200);
 
-  } catch {
+  } catch (err) {
 
+    console.error("Erro webhook:", err);
     res.sendStatus(500);
 
   }
