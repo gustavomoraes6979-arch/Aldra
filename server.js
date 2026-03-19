@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (VERSÃO FINAL DEFINITIVA)
+// Aldra — server.js (VERSÃO FINAL CORRIGIDA DE VERDADE)
 // =======================================================================
 
 import express from "express";
@@ -217,7 +217,7 @@ app.get("/auth/me", auth, async (req, res) => {
 });
 
 // =======================================================================
-// CRIAR PIX
+// CRIAR PIX (CORRIGIDO)
 // =======================================================================
 
 app.post("/subscription/create", auth, async (req, res) => {
@@ -233,13 +233,20 @@ app.post("/subscription/create", auth, async (req, res) => {
       }
     });
 
-    console.log("🔥 PIX criado ID:", result.id);
+    const paymentId = result?.id || result?.response?.id;
+
+    console.log("🔥 RESULT MP:", result);
+    console.log("🔥 PAYMENT ID:", paymentId);
+
+    if (!paymentId) {
+      return res.status(500).json({ error: "Erro ao gerar pagamento" });
+    }
 
     await dbRun(
       `UPDATE subscriptions
        SET payment_id=?, status='pending'
        WHERE user_id=?`,
-      [result.id, req.user.id]
+      [paymentId, req.user.id]
     );
 
     res.json(result);
@@ -254,7 +261,7 @@ app.post("/subscription/create", auth, async (req, res) => {
 });
 
 // =======================================================================
-// STATUS (DEFINITIVO)
+// STATUS (CORRIGIDO DE VERDADE)
 // =======================================================================
 
 app.get("/subscription/status", auth, async (req, res) => {
@@ -266,28 +273,19 @@ app.get("/subscription/status", auth, async (req, res) => {
       [req.user.id]
     );
 
-    if (!sub)
+    if (!sub || !sub.payment_id)
       return res.json({ status: "pending" });
-
-    if (!sub.payment_id)
-      return res.json({ status: sub.status });
 
     console.log("🔎 PAYMENT ID:", sub.payment_id);
 
     const paymentData = await payment.get({ id: sub.payment_id });
 
-    const status = paymentData.status;
+    console.log("💰 STATUS MP:", paymentData.status);
 
-    console.log("💰 STATUS MP:", status);
-
-    const statusOk = [
-      "approved",
-      "authorized",
-      "accredited",
-      "in_process"
-    ];
-
-    if (statusOk.includes(status)) {
+    if (
+      paymentData.status === "approved" ||
+      paymentData.status === "authorized"
+    ) {
 
       await dbRun(
         `UPDATE subscriptions SET status='active' WHERE user_id=?`,
@@ -305,20 +303,14 @@ app.get("/subscription/status", auth, async (req, res) => {
   } catch (err) {
 
     console.error("Erro status:", err);
-
-    const sub = await dbGet(
-      `SELECT status FROM subscriptions WHERE user_id=?`,
-      [req.user.id]
-    );
-
-    return res.json({ status: sub?.status || "pending" });
+    return res.json({ status: "pending" });
 
   }
 
 });
 
 // =======================================================================
-// WEBHOOK
+// WEBHOOK (OK)
 // =======================================================================
 
 app.post("/webhook/mercadopago", async (req, res) => {
@@ -332,18 +324,12 @@ app.post("/webhook/mercadopago", async (req, res) => {
 
     const paymentData = await payment.get({ id: paymentId });
 
-    const status = paymentData.status;
+    console.log("🔔 WEBHOOK:", paymentData.status);
 
-    console.log("🔔 WEBHOOK STATUS:", status);
-
-    const statusOk = [
-      "approved",
-      "authorized",
-      "accredited",
-      "in_process"
-    ];
-
-    if (statusOk.includes(status)) {
+    if (
+      paymentData.status === "approved" ||
+      paymentData.status === "authorized"
+    ) {
 
       await dbRun(
         `UPDATE subscriptions
