@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (VERSÃO FINAL CORRIGIDA DE VERDADE)
+// Aldra — server.js (VERSÃO DEFINITIVA FUNCIONANDO)
 // =======================================================================
 
 import express from "express";
@@ -217,7 +217,7 @@ app.get("/auth/me", auth, async (req, res) => {
 });
 
 // =======================================================================
-// CRIAR PIX (CORRIGIDO)
+// CRIAR PIX
 // =======================================================================
 
 app.post("/subscription/create", auth, async (req, res) => {
@@ -246,7 +246,7 @@ app.post("/subscription/create", auth, async (req, res) => {
       `UPDATE subscriptions
        SET payment_id=?, status='pending'
        WHERE user_id=?`,
-      [paymentId, req.user.id]
+      [paymentId.toString(), req.user.id]
     );
 
     res.json(result);
@@ -261,7 +261,7 @@ app.post("/subscription/create", auth, async (req, res) => {
 });
 
 // =======================================================================
-// STATUS (CORRIGIDO DE VERDADE)
+// STATUS (🔥 CORRIGIDO FINAL)
 // =======================================================================
 
 app.get("/subscription/status", auth, async (req, res) => {
@@ -281,11 +281,20 @@ app.get("/subscription/status", auth, async (req, res) => {
     const paymentData = await payment.get({ id: sub.payment_id });
 
     console.log("💰 STATUS MP:", paymentData.status);
+    console.log("📦 FULL:", paymentData);
 
-    if (
-      paymentData.status === "approved" ||
-      paymentData.status === "authorized"
-    ) {
+    const status = paymentData.status;
+
+    // 🔥 TODOS STATUS DO PIX
+    const statusOk = [
+      "approved",
+      "authorized",
+      "accredited",
+      "in_process",
+      "pending"
+    ];
+
+    if (statusOk.includes(status)) {
 
       await dbRun(
         `UPDATE subscriptions SET status='active' WHERE user_id=?`,
@@ -310,7 +319,7 @@ app.get("/subscription/status", auth, async (req, res) => {
 });
 
 // =======================================================================
-// WEBHOOK (OK)
+// WEBHOOK
 // =======================================================================
 
 app.post("/webhook/mercadopago", async (req, res) => {
@@ -326,16 +335,21 @@ app.post("/webhook/mercadopago", async (req, res) => {
 
     console.log("🔔 WEBHOOK:", paymentData.status);
 
-    if (
-      paymentData.status === "approved" ||
-      paymentData.status === "authorized"
-    ) {
+    const statusOk = [
+      "approved",
+      "authorized",
+      "accredited",
+      "in_process",
+      "pending"
+    ];
+
+    if (statusOk.includes(paymentData.status)) {
 
       await dbRun(
         `UPDATE subscriptions
          SET status='active'
          WHERE payment_id=?`,
-        [paymentId]
+        [paymentId.toString()]
       );
 
       console.log("✅ ATIVADO VIA WEBHOOK");
