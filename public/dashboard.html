@@ -5,12 +5,7 @@
 
 <meta charset="UTF-8">
 <title>Aldra — Dashboard</title>
-
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 
 <style>
 
@@ -31,8 +26,6 @@ background:var(--bg);
 font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
 }
 
-/* HEADER */
-
 header{
 background:var(--white);
 padding:18px 32px;
@@ -40,138 +33,77 @@ display:flex;
 justify-content:space-between;
 align-items:center;
 border-bottom:1px solid var(--borda);
-box-shadow:var(--shadow);
 }
-
-header h1{
-margin:0;
-font-size:20px;
-color:var(--azul-escuro);
-}
-
-.header-actions{
-display:flex;
-gap:10px;
-}
-
-button{
-border:none;
-border-radius:var(--radius);
-padding:10px 16px;
-font-weight:600;
-cursor:pointer;
-}
-
-.btn-admin{
-background:#111;
-color:#fff;
-display:none;
-}
-
-.btn-logout{
-background:#e74c3c;
-color:white;
-}
-
-/* ALERTA */
-
-.alert{
-background:#fff3cd;
-color:#856404;
-border:1px solid #ffeeba;
-margin:25px;
-padding:24px;
-border-radius:var(--radius);
-font-weight:600;
-display:none;
-}
-
-.action{
-background:var(--verde);
-color:white;
-padding:12px 22px;
-margin-top:15px;
-}
-
-/* MENU */
 
 .menu{
 display:flex;
 flex-wrap:wrap;
-gap:12px;
-padding:18px 28px;
+gap:10px;
+padding:15px;
 background:var(--white);
-border-bottom:1px solid var(--borda);
 }
 
 .menu button{
 background:var(--azul);
-color:white;
+color:#fff;
 }
 
-/* SECTIONS */
-
 .section{
-background:var(--white);
-margin:30px;
-padding:30px;
-border-radius:var(--radius);
-border:1px solid var(--borda);
-box-shadow:var(--shadow);
 display:none;
+background:var(--white);
+margin:20px;
+padding:25px;
+border-radius:var(--radius);
 }
 
 .section.active{
 display:block;
 }
 
-/* INPUTS */
-
-input,textarea{
+input{
 width:100%;
-padding:12px;
-margin-top:10px;
-border-radius:var(--radius);
+padding:10px;
+margin-top:8px;
+margin-bottom:8px;
+border-radius:8px;
 border:1px solid var(--borda);
 }
 
-/* TABLE */
+button{
+padding:10px 15px;
+border:none;
+border-radius:10px;
+cursor:pointer;
+}
+
+.action{
+background:var(--verde);
+color:#fff;
+margin-top:10px;
+}
 
 table{
 width:100%;
-border-collapse:collapse;
 margin-top:20px;
+border-collapse:collapse;
 }
 
 th,td{
-padding:12px;
-border-bottom:1px solid var(--borda);
+padding:10px;
+border-bottom:1px solid #ddd;
 }
 
-th{
-background:#f1f4f8;
+.alert{
+display:none;
+margin:20px;
+padding:20px;
+background:#fff3cd;
+border-radius:10px;
 }
-
-/* PIX */
 
 .pix-box{
-margin-top:20px;
-background:white;
-padding:20px;
-border-radius:var(--radius);
-border:1px solid var(--borda);
 display:none;
-text-align:center;
-}
-
-.pix-box img{
-width:220px;
-margin-top:10px;
-}
-
-.section h2{
-margin-top:0;
-color:var(--azul-escuro);
+margin-top:20px;
 }
 
 </style>
@@ -181,103 +113,51 @@ color:var(--azul-escuro);
 <body>
 
 <header>
+<h1>🚀 Aldra</h1>
 
-<h1>🚀 Aldra — Plataforma Administrativa</h1>
-
-<div class="header-actions">
-
-<button id="adminBtn" class="btn-admin">
-🔐 Admin
-</button>
-
-<button class="btn-logout" onclick="logout()">
-Sair
-</button>
-
+<div>
+<button id="adminBtn" style="display:none;">Admin</button>
+<button onclick="logout()">Sair</button>
 </div>
 
 </header>
 
-
-<!-- ALERTA ASSINATURA -->
+<!-- ALERTA -->
 
 <div id="alert" class="alert">
+⚠️ Assinatura inativa
 
-<div id="alertText">
-⚠️ Sua assinatura não está ativa.
-</div>
-
-<button id="btnAssinar" class="action">
-Assinar Plano de Lançamento — R$ 1,00
+<button onclick="ativarPlano()" class="action">
+Ativar Plano R$1
 </button>
 
-<div class="pix-box" id="pixBox">
-
-<h3>📲 Escaneie o QR Code</h3>
-
-<img id="qrImage" alt="QR Code PIX">
-
-<p><strong>Copia e Cola:</strong></p>
-
-<textarea id="pixCode" readonly></textarea>
-
+<div id="pixBox" class="pix-box">
+<img id="qrImage">
+<textarea id="pixCode"></textarea>
 </div>
 
 </div>
-
 
 <!-- MENU -->
 
 <div class="menu">
-
-<button onclick="showSection('PDF')">📄 PDF</button>
-<button onclick="showSection('Contrato')">📝 Contrato</button>
-<button onclick="showSection('Cobranca')">💳 Cobrança</button>
-<button onclick="showSection('Relatorios')">📊 Relatórios</button>
-<button onclick="showSection('Chat')">💬 IA</button>
-<button onclick="showSection('CRM')">👥 CRM</button>
-<button onclick="showSection('Estoque')">📦 Estoque</button>
-<button onclick="showSection('Financeiro')">💰 Financeiro</button>
-<button onclick="showSection('Fiscal')">📑 Fiscal</button>
-<button onclick="showSection('Certidoes')">📜 Certidões</button>
-<button onclick="showSection('Admin')">🏢 Administrativo</button>
-
+<button onclick="showSection('CRM')">CRM</button>
+<button onclick="showSection('Estoque')">Estoque</button>
+<button onclick="showSection('Financeiro')">Financeiro</button>
 </div>
 
-
-<!-- SECTIONS (mantidas iguais) -->
-
-<div id="sectionPDF" class="section active">
-<h2>📄 Análise de PDF</h2>
-<p>Envie documentos para análise automática com IA.</p>
-</div>
-
-<div id="sectionContrato" class="section">
-<h2>📝 Gerador de Contratos</h2>
-</div>
-
-<div id="sectionCobranca" class="section">
-<h2>💳 Sistema de Cobrança</h2>
-</div>
-
-<div id="sectionRelatorios" class="section">
-<h2>📊 Relatórios</h2>
-</div>
-
-<div id="sectionChat" class="section">
-<h2>💬 Assistente IA da Aldra</h2>
-</div>
+<!-- ================= CRM ================= -->
 
 <div id="sectionCRM" class="section">
 
-<h2>👥 CRM</h2>
+<h2>CRM</h2>
 
-<input id="crmNome" placeholder="Nome do cliente">
-<input id="crmEmail" placeholder="Email do cliente">
+<input id="crmNome" placeholder="Nome">
+<input id="crmEmail" placeholder="Email">
 <input id="crmTelefone" placeholder="Telefone">
 
 <button class="action" onclick="salvarCliente()">
-Salvar Cliente
+Adicionar Cliente
 </button>
 
 <table>
@@ -286,6 +166,7 @@ Salvar Cliente
 <th>Nome</th>
 <th>Email</th>
 <th>Telefone</th>
+<th>Ação</th>
 </tr>
 </thead>
 
@@ -294,16 +175,29 @@ Salvar Cliente
 
 </div>
 
+<!-- ================= ESTOQUE ================= -->
+
 <div id="sectionEstoque" class="section">
-<h2>📦 Controle de Estoque</h2>
+
+<h2>Estoque</h2>
+
+<input id="prodNome" placeholder="Produto">
+<input id="prodSku" placeholder="SKU">
+<input id="prodQtd" placeholder="Quantidade">
+<input id="prodPreco" placeholder="Preço">
+
+<button class="action" onclick="addProduto()">
+Adicionar Produto
+</button>
 
 <table>
 <thead>
 <tr>
 <th>Produto</th>
 <th>SKU</th>
-<th>Quantidade</th>
+<th>Qtd</th>
 <th>Preço</th>
+<th>Ação</th>
 </tr>
 </thead>
 
@@ -312,8 +206,19 @@ Salvar Cliente
 
 </div>
 
+<!-- ================= FINANCEIRO ================= -->
+
 <div id="sectionFinanceiro" class="section">
-<h2>💰 Financeiro</h2>
+
+<h2>Financeiro</h2>
+
+<input id="finDesc" placeholder="Descrição">
+<input id="finTipo" placeholder="Tipo (entrada/saida)">
+<input id="finValor" placeholder="Valor">
+
+<button class="action" onclick="addConta()">
+Adicionar Conta
+</button>
 
 <table>
 <thead>
@@ -322,6 +227,7 @@ Salvar Cliente
 <th>Tipo</th>
 <th>Valor</th>
 <th>Status</th>
+<th>Ação</th>
 </tr>
 </thead>
 
@@ -330,42 +236,7 @@ Salvar Cliente
 
 </div>
 
-<div id="sectionFiscal" class="section">
-<h2>📑 Gestão Fiscal</h2>
-</div>
-
-<div id="sectionCertidoes" class="section">
-<h2>📜 Certidões</h2>
-</div>
-
-<div id="sectionAdmin" class="section">
-<h2>🏢 Administrativo</h2>
-</div>
-
-
-<script src="/js/dashboard.js?v=8"></script>
-
-<script>
-// 🔥 GARANTE QUE OS BOTÕES FUNCIONEM SEM ERRO
-
-document.addEventListener("DOMContentLoaded", ()=>{
-
-  const btn = document.getElementById("btnAssinar");
-  if(btn){
-    btn.addEventListener("click", ()=>{
-      if(window.ativarPlano) window.ativarPlano();
-    });
-  }
-
-  const adminBtn = document.getElementById("adminBtn");
-  if(adminBtn){
-    adminBtn.addEventListener("click", ()=>{
-      window.location.href = "/admin-dashboard.html";
-    });
-  }
-
-});
-</script>
+<script src="/js/dashboard.js"></script>
 
 </body>
 </html>

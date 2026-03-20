@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — ALDRA ERP COMPLETO
+// dashboard.js — ALDRA ERP FINAL PROFISSIONAL
 // ==========================================
 
 console.log("🚀 Aldra Dashboard iniciado");
@@ -56,7 +56,6 @@ function hideAlert(){
   subscriptionActive = true;
   alertBox.style.display="none";
   pixBox.style.display="none";
-  console.log("✅ Assinatura ativa");
 }
 
 function updateSubscription(status){
@@ -108,7 +107,6 @@ async function checkPaymentStatus(){
   return false;
 }
 
-// PIX
 window.ativarPlano = async function(){
 
   const res = await fetch("/subscription/create",{
@@ -196,6 +194,8 @@ window.salvarCliente = async function(){
   const email = document.getElementById("crmEmail").value;
   const phone = document.getElementById("crmTelefone").value;
 
+  if(!name) return alert("Nome obrigatório");
+
   await fetch("/crm",{
     method:"POST",
     headers:{
@@ -204,6 +204,10 @@ window.salvarCliente = async function(){
     },
     body: JSON.stringify({ name,email,phone })
   });
+
+  document.getElementById("crmNome").value="";
+  document.getElementById("crmEmail").value="";
+  document.getElementById("crmTelefone").value="";
 
   loadClients();
 };
@@ -235,15 +239,17 @@ window.deleteClient = async function(id){
 };
 
 // ==========================================
-// ESTOQUE
+// ESTOQUE (🔥 CORRIGIDO)
 // ==========================================
 
 window.addProduto = async function(){
 
-  const name = prompt("Produto:");
-  const sku = prompt("SKU:");
-  const quantity = prompt("Quantidade:");
-  const price = prompt("Preço:");
+  const name = document.getElementById("prodNome").value;
+  const sku = document.getElementById("prodSku").value;
+  const quantity = document.getElementById("prodQtd").value;
+  const price = document.getElementById("prodPreco").value;
+
+  if(!name) return alert("Produto obrigatório");
 
   await fetch("/products",{
     method:"POST",
@@ -253,6 +259,11 @@ window.addProduto = async function(){
     },
     body: JSON.stringify({ name,sku,quantity,price })
   });
+
+  document.getElementById("prodNome").value="";
+  document.getElementById("prodSku").value="";
+  document.getElementById("prodQtd").value="";
+  document.getElementById("prodPreco").value="";
 
   loadProdutos();
 };
@@ -285,14 +296,16 @@ window.deleteProduto = async function(id){
 };
 
 // ==========================================
-// FINANCEIRO
+// FINANCEIRO (🔥 CORRIGIDO)
 // ==========================================
 
 window.addConta = async function(){
 
-  const description = prompt("Descrição:");
-  const type = prompt("Tipo (entrada/saida):");
-  const value = prompt("Valor:");
+  const description = document.getElementById("finDesc").value;
+  const type = document.getElementById("finTipo").value;
+  const value = document.getElementById("finValor").value;
+
+  if(!description) return alert("Descrição obrigatória");
 
   await fetch("/finance/accounts",{
     method:"POST",
@@ -302,6 +315,10 @@ window.addConta = async function(){
     },
     body: JSON.stringify({ description,type,value })
   });
+
+  document.getElementById("finDesc").value="";
+  document.getElementById("finTipo").value="";
+  document.getElementById("finValor").value="";
 
   loadFinanceiro();
 };
@@ -355,7 +372,7 @@ async function init(){
     await checkPaymentStatus();
   },10000);
 
-  showSection("PDF");
+  showSection("CRM");
 }
 
 init();
