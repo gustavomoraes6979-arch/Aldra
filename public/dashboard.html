@@ -26,6 +26,8 @@ background:var(--bg);
 font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
 }
 
+/* HEADER */
+
 header{
 background:var(--white);
 padding:18px 32px;
@@ -35,12 +37,15 @@ align-items:center;
 border-bottom:1px solid var(--borda);
 }
 
+/* MENU */
+
 .menu{
 display:flex;
 flex-wrap:wrap;
 gap:10px;
 padding:15px;
 background:var(--white);
+border-bottom:1px solid var(--borda);
 }
 
 .menu button{
@@ -48,17 +53,22 @@ background:var(--azul);
 color:#fff;
 }
 
+/* SEÇÕES */
+
 .section{
 display:none;
 background:var(--white);
 margin:20px;
 padding:25px;
 border-radius:var(--radius);
+box-shadow:var(--shadow);
 }
 
 .section.active{
 display:block;
 }
+
+/* FORM */
 
 input{
 width:100%;
@@ -82,6 +92,8 @@ color:#fff;
 margin-top:10px;
 }
 
+/* TABELA */
+
 table{
 width:100%;
 margin-top:20px;
@@ -92,6 +104,8 @@ th,td{
 padding:10px;
 border-bottom:1px solid #ddd;
 }
+
+/* ALERTA */
 
 .alert{
 display:none;
@@ -104,6 +118,17 @@ border-radius:10px;
 .pix-box{
 display:none;
 margin-top:20px;
+}
+
+.pix-box img{
+max-width:200px;
+display:block;
+margin-bottom:10px;
+}
+
+textarea{
+width:100%;
+height:100px;
 }
 
 </style>
@@ -133,7 +158,7 @@ Ativar Plano R$1
 
 <div id="pixBox" class="pix-box">
 <img id="qrImage">
-<textarea id="pixCode"></textarea>
+<textarea id="pixCode" readonly></textarea>
 </div>
 
 </div>
@@ -148,7 +173,7 @@ Ativar Plano R$1
 
 <!-- ================= CRM ================= -->
 
-<div id="sectionCRM" class="section">
+<div id="sectionCRM" class="section active">
 
 <h2>CRM</h2>
 

@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (VERSÃO DEFINITIVA FUNCIONANDO)
+// Aldra — server.js (VERSÃO DEFINITIVA CORRIGIDA)
 // =======================================================================
 
 import express from "express";
@@ -101,22 +101,15 @@ db.serialize(() => {
 async function auth(req, res, next) {
   const header = req.headers.authorization;
 
-  if (!header) {
-    return res.status(401).json({ error: "Token ausente" });
-  }
+  if (!header) return res.status(401).json({ error: "Token ausente" });
 
   try {
     const token = header.replace("Bearer ", "");
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const user = await dbGet(
-      "SELECT * FROM users WHERE id=?",
-      [decoded.id]
-    );
+    const user = await dbGet("SELECT * FROM users WHERE id=?", [decoded.id]);
 
-    if (!user) {
-      return res.status(401).json({ error: "Usuário inválido" });
-    }
+    if (!user) return res.status(401).json({ error: "Usuário inválido" });
 
     user.is_admin = user.email === ADMIN_EMAIL;
     req.user = user;
@@ -126,66 +119,6 @@ async function auth(req, res, next) {
     res.status(401).json({ error: "Token inválido" });
   }
 }
-
-// =======================================================================
-// REGISTER
-// =======================================================================
-
-app.post("/auth/register", async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-
-    const hash = bcrypt.hashSync(password, 10);
-
-    const result = await dbRun(
-      "INSERT INTO users(name,email,password) VALUES(?,?,?)",
-      [name, email.toLowerCase(), hash]
-    );
-
-    await dbRun(
-      "INSERT INTO subscriptions(user_id,status) VALUES(?, 'pending')",
-      [result.lastID]
-    );
-
-    res.json({ success: true });
-  } catch {
-    res.status(400).json({ error: "Email já existe" });
-  }
-});
-
-// =======================================================================
-// LOGIN
-// =======================================================================
-
-app.post("/auth/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  const user = await dbGet(
-    "SELECT * FROM users WHERE email=?",
-    [email.toLowerCase()]
-  );
-
-  if (!user) {
-    return res.status(404).json({ error: "Usuário não encontrado" });
-  }
-
-  if (!bcrypt.compareSync(password, user.password)) {
-    return res.status(401).json({ error: "Senha incorreta" });
-  }
-
-  const token = jwt.sign(
-    { id: user.id },
-    process.env.JWT_SECRET,
-    { expiresIn: "30d" }
-  );
-
-  res.json({
-    token,
-    redirect: user.email === ADMIN_EMAIL
-      ? "/admin-dashboard.html"
-      : "/dashboard.html",
-  });
-});
 
 // =======================================================================
 // AUTH ME
@@ -210,6 +143,7 @@ app.get("/auth/me", auth, async (req, res) => {
 
 app.post("/subscription/create", auth, async (req, res) => {
   try {
+
     const result = await payment.create({
       body: {
         transaction_amount: PLAN_PRICE,
@@ -221,10 +155,7 @@ app.post("/subscription/create", auth, async (req, res) => {
       },
     });
 
-    const paymentId = result?.id || result?.response?.id;
-
-    console.log("🔥 RESULT MP:", result);
-    console.log("🔥 PAYMENT ID:", paymentId);
+    const paymentId = result.id;
 
     if (!paymentId) {
       return res.status(500).json({ error: "Erro ao gerar pagamento" });
@@ -244,13 +175,14 @@ app.post("/subscription/create", auth, async (req, res) => {
 });
 
 // =======================================================================
-// STATUS
+// STATUS (🔥 CORRIGIDO)
 // =======================================================================
 
 app.get("/subscription/status", auth, async (req, res) => {
   try {
+
     const sub = await dbGet(
-      "SELECT payment_id,status FROM subscriptions WHERE user_id=?",
+      "SELECT payment_id FROM subscriptions WHERE user_id=?",
       [req.user.id]
     );
 
@@ -258,24 +190,15 @@ app.get("/subscription/status", auth, async (req, res) => {
       return res.json({ status: "pending" });
     }
 
-    console.log("🔎 PAYMENT ID:", sub.payment_id);
-
     const paymentData = await payment.get({ id: sub.payment_id });
-
-    console.log("💰 STATUS MP:", paymentData.status);
-    console.log("📦 FULL:", paymentData);
 
     const status = paymentData.status;
 
-    const statusOk = [
-      "approved",
-      "authorized",
-      "accredited",
-      "in_process",
-      "pending"
-    ];
+    console.log("💰 STATUS MP:", status);
 
-    if (statusOk.includes(status)) {
+    // 🔥 SÓ ATIVA SE REALMENTE PAGO
+    if (status === "approved") {
+
       await dbRun(
         "UPDATE subscriptions SET status='active' WHERE user_id=?",
         [req.user.id]
@@ -295,28 +218,22 @@ app.get("/subscription/status", auth, async (req, res) => {
 });
 
 // =======================================================================
-// WEBHOOK
+// WEBHOOK (🔥 CORRIGIDO)
 // =======================================================================
 
 app.post("/webhook/mercadopago", async (req, res) => {
   try {
+
     const paymentId = req.body?.data?.id;
 
     if (!paymentId) return res.sendStatus(200);
 
     const paymentData = await payment.get({ id: paymentId });
 
-    console.log("🔔 WEBHOOK:", paymentData.status);
+    console.log("🔔 WEBHOOK STATUS:", paymentData.status);
 
-    const statusOk = [
-      "approved",
-      "authorized",
-      "accredited",
-      "in_process",
-      "pending"
-    ];
+    if (paymentData.status === "approved") {
 
-    if (statusOk.includes(paymentData.status)) {
       await dbRun(
         "UPDATE subscriptions SET status='active' WHERE payment_id=?",
         [paymentId.toString()]

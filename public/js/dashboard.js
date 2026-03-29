@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — ALDRA ERP FINAL PROFISSIONAL
+// dashboard.js — ALDRA ERP FINAL PROFISSIONAL (CORRIGIDO)
 // ==========================================
 
 console.log("🚀 Aldra Dashboard iniciado");
@@ -59,7 +59,11 @@ function hideAlert(){
 }
 
 function updateSubscription(status){
-  status === "active" ? hideAlert() : showAlert();
+  if(status === "active"){
+    hideAlert();
+  } else {
+    showAlert();
+  }
 }
 
 // ==========================================
@@ -68,23 +72,29 @@ function updateSubscription(status){
 
 async function checkUser(){
 
-  const res = await fetch("/auth/me",{
-    headers:{ Authorization:"Bearer "+token }
-  });
+  try{
 
-  if(res.status === 401){
-    logout();
-    return;
+    const res = await fetch("/auth/me",{
+      headers:{ Authorization:"Bearer "+token }
+    });
+
+    if(res.status === 401){
+      logout();
+      return;
+    }
+
+    const data = await safeJson(res);
+
+    if(data.is_admin){
+      isAdmin = true;
+      adminBtn.style.display="inline-block";
+    }
+
+    updateSubscription(data.subscription_status);
+
+  }catch(err){
+    console.log("Erro checkUser:", err);
   }
-
-  const data = await safeJson(res);
-
-  if(data.is_admin){
-    isAdmin = true;
-    adminBtn.style.display="inline-block";
-  }
-
-  updateSubscription(data.subscription_status);
 }
 
 // ==========================================
@@ -93,43 +103,57 @@ async function checkUser(){
 
 async function checkPaymentStatus(){
 
-  const res = await fetch("/subscription/status",{
-    headers:{ Authorization:"Bearer "+token }
-  });
+  try{
 
-  const data = await res.json();
+    const res = await fetch("/subscription/status",{
+      headers:{ Authorization:"Bearer "+token }
+    });
 
-  if(data.status === "active"){
-    updateSubscription("active");
-    return true;
+    const data = await safeJson(res);
+
+    if(data.status === "active"){
+      updateSubscription("active");
+      return true;
+    }
+
+    return false;
+
+  }catch(err){
+    console.log("Erro pagamento:", err);
+    return false;
   }
-
-  return false;
 }
 
 window.ativarPlano = async function(){
 
-  const res = await fetch("/subscription/create",{
-    method:"POST",
-    headers:{ Authorization:"Bearer "+token }
-  });
+  try{
 
-  const data = await safeJson(res);
+    const res = await fetch("/subscription/create",{
+      method:"POST",
+      headers:{ Authorization:"Bearer "+token }
+    });
 
-  const pixData =
-    data?.point_of_interaction?.transaction_data ||
-    data?.transaction_data;
+    const data = await safeJson(res);
 
-  if(!pixData){
-    alert("Erro PIX");
-    return;
+    const pixData =
+      data?.point_of_interaction?.transaction_data ||
+      data?.transaction_data;
+
+    if(!pixData){
+      alert("Erro ao gerar PIX");
+      return;
+    }
+
+    pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
+    pixCopiaCola.value = pixData.qr_code;
+    pixBox.style.display="block";
+
+    startPaymentCheck();
+
+  }catch(err){
+    console.log("Erro ativarPlano:", err);
+    alert("Erro ao criar pagamento");
   }
-
-  pixQr.src = "data:image/png;base64," + pixData.qr_code_base64;
-  pixCopiaCola.value = pixData.qr_code;
-  pixBox.style.display="block";
-
-  startPaymentCheck();
 };
 
 function startPaymentCheck(){
@@ -141,6 +165,7 @@ function startPaymentCheck(){
     if(pago){
       clearInterval(interval);
       alert("✅ Pagamento confirmado!");
+      location.reload(); // 🔥 força atualizar dashboard
     }
 
   },4000);
@@ -151,10 +176,9 @@ function startPaymentCheck(){
 // ==========================================
 
 const sections = [
-"sectionPDF","sectionContrato","sectionCobranca",
-"sectionRelatorios","sectionChat","sectionCRM",
-"sectionEstoque","sectionFinanceiro","sectionFiscal",
-"sectionCertidoes","sectionAdmin"
+"sectionCRM",
+"sectionEstoque",
+"sectionFinanceiro"
 ];
 
 function hideAllSections(){
@@ -167,11 +191,6 @@ window.showSection = function(name){
 
   if(!subscriptionActive){
     alert("⚠️ Assinatura inativa");
-    return;
-  }
-
-  if(name==="Admin" && !isAdmin){
-    alert("🚫 Apenas admin");
     return;
   }
 
@@ -196,41 +215,53 @@ window.salvarCliente = async function(){
 
   if(!name) return alert("Nome obrigatório");
 
-  await fetch("/crm",{
-    method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      Authorization:"Bearer "+token
-    },
-    body: JSON.stringify({ name,email,phone })
-  });
+  try{
 
-  document.getElementById("crmNome").value="";
-  document.getElementById("crmEmail").value="";
-  document.getElementById("crmTelefone").value="";
+    await fetch("/crm",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        Authorization:"Bearer "+token
+      },
+      body: JSON.stringify({ name,email,phone })
+    });
 
-  loadClients();
+    document.getElementById("crmNome").value="";
+    document.getElementById("crmEmail").value="";
+    document.getElementById("crmTelefone").value="";
+
+    loadClients();
+
+  }catch(err){
+    console.log("Erro salvarCliente:", err);
+  }
 };
 
 async function loadClients(){
 
-  const res = await fetch("/crm",{ headers:{ Authorization:"Bearer "+token }});
-  const data = await safeJson(res);
+  try{
 
-  crmLista.innerHTML="";
+    const res = await fetch("/crm",{ headers:{ Authorization:"Bearer "+token }});
+    const data = await safeJson(res);
 
-  data.forEach(c=>{
-    const row=document.createElement("tr");
+    crmLista.innerHTML="";
 
-    row.innerHTML=`
-    <td>${c.name}</td>
-    <td>${c.email}</td>
-    <td>${c.phone}</td>
-    <td><button onclick="deleteClient(${c.id})">🗑️</button></td>
-    `;
+    data.forEach(c=>{
+      const row=document.createElement("tr");
 
-    crmLista.appendChild(row);
-  });
+      row.innerHTML=`
+      <td>${c.name}</td>
+      <td>${c.email}</td>
+      <td>${c.phone}</td>
+      <td><button onclick="deleteClient(${c.id})">🗑️</button></td>
+      `;
+
+      crmLista.appendChild(row);
+    });
+
+  }catch(err){
+    console.log("Erro loadClients:", err);
+  }
 }
 
 window.deleteClient = async function(id){
@@ -239,7 +270,7 @@ window.deleteClient = async function(id){
 };
 
 // ==========================================
-// ESTOQUE (🔥 CORRIGIDO)
+// ESTOQUE
 // ==========================================
 
 window.addProduto = async function(){
@@ -251,43 +282,55 @@ window.addProduto = async function(){
 
   if(!name) return alert("Produto obrigatório");
 
-  await fetch("/products",{
-    method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      Authorization:"Bearer "+token
-    },
-    body: JSON.stringify({ name,sku,quantity,price })
-  });
+  try{
 
-  document.getElementById("prodNome").value="";
-  document.getElementById("prodSku").value="";
-  document.getElementById("prodQtd").value="";
-  document.getElementById("prodPreco").value="";
+    await fetch("/products",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        Authorization:"Bearer "+token
+      },
+      body: JSON.stringify({ name,sku,quantity,price })
+    });
 
-  loadProdutos();
+    document.getElementById("prodNome").value="";
+    document.getElementById("prodSku").value="";
+    document.getElementById("prodQtd").value="";
+    document.getElementById("prodPreco").value="";
+
+    loadProdutos();
+
+  }catch(err){
+    console.log("Erro addProduto:", err);
+  }
 };
 
 async function loadProdutos(){
 
-  const res = await fetch("/products",{ headers:{ Authorization:"Bearer "+token }});
-  const data = await safeJson(res);
+  try{
 
-  estoqueLista.innerHTML="";
+    const res = await fetch("/products",{ headers:{ Authorization:"Bearer "+token }});
+    const data = await safeJson(res);
 
-  data.forEach(p=>{
-    const row=document.createElement("tr");
+    estoqueLista.innerHTML="";
 
-    row.innerHTML=`
-    <td>${p.name}</td>
-    <td>${p.sku}</td>
-    <td>${p.quantity}</td>
-    <td>${p.price}</td>
-    <td><button onclick="deleteProduto(${p.id})">🗑️</button></td>
-    `;
+    data.forEach(p=>{
+      const row=document.createElement("tr");
 
-    estoqueLista.appendChild(row);
-  });
+      row.innerHTML=`
+      <td>${p.name}</td>
+      <td>${p.sku}</td>
+      <td>${p.quantity}</td>
+      <td>${p.price}</td>
+      <td><button onclick="deleteProduto(${p.id})">🗑️</button></td>
+      `;
+
+      estoqueLista.appendChild(row);
+    });
+
+  }catch(err){
+    console.log("Erro loadProdutos:", err);
+  }
 }
 
 window.deleteProduto = async function(id){
@@ -296,7 +339,7 @@ window.deleteProduto = async function(id){
 };
 
 // ==========================================
-// FINANCEIRO (🔥 CORRIGIDO)
+// FINANCEIRO
 // ==========================================
 
 window.addConta = async function(){
@@ -307,42 +350,54 @@ window.addConta = async function(){
 
   if(!description) return alert("Descrição obrigatória");
 
-  await fetch("/finance/accounts",{
-    method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      Authorization:"Bearer "+token
-    },
-    body: JSON.stringify({ description,type,value })
-  });
+  try{
 
-  document.getElementById("finDesc").value="";
-  document.getElementById("finTipo").value="";
-  document.getElementById("finValor").value="";
+    await fetch("/finance/accounts",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        Authorization:"Bearer "+token
+      },
+      body: JSON.stringify({ description,type,value })
+    });
 
-  loadFinanceiro();
+    document.getElementById("finDesc").value="";
+    document.getElementById("finTipo").value="";
+    document.getElementById("finValor").value="";
+
+    loadFinanceiro();
+
+  }catch(err){
+    console.log("Erro addConta:", err);
+  }
 };
 
 async function loadFinanceiro(){
 
-  const res = await fetch("/finance/accounts",{ headers:{ Authorization:"Bearer "+token }});
-  const data = await safeJson(res);
+  try{
 
-  financeiroLista.innerHTML="";
+    const res = await fetch("/finance/accounts",{ headers:{ Authorization:"Bearer "+token }});
+    const data = await safeJson(res);
 
-  data.forEach(f=>{
-    const row=document.createElement("tr");
+    financeiroLista.innerHTML="";
 
-    row.innerHTML=`
-    <td>${f.description}</td>
-    <td>${f.type}</td>
-    <td>${f.value}</td>
-    <td>${f.status}</td>
-    <td><button onclick="deleteConta(${f.id})">🗑️</button></td>
-    `;
+    data.forEach(f=>{
+      const row=document.createElement("tr");
 
-    financeiroLista.appendChild(row);
-  });
+      row.innerHTML=`
+      <td>${f.description}</td>
+      <td>${f.type}</td>
+      <td>${f.value}</td>
+      <td>${f.status}</td>
+      <td><button onclick="deleteConta(${f.id})">🗑️</button></td>
+      `;
+
+      financeiroLista.appendChild(row);
+    });
+
+  }catch(err){
+    console.log("Erro loadFinanceiro:", err);
+  }
 }
 
 window.deleteConta = async function(id){
