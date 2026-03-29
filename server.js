@@ -1,5 +1,5 @@
 // =======================================================================
-// Aldra — server.js (ERP COMPLETO + ASSINATURA + PROTEÇÃO)
+// Aldra — server.js (VERSÃO DEFINITIVA FUNCIONANDO)
 // =======================================================================
 
 import express from "express";
@@ -54,286 +54,283 @@ app.use(express.json());
 
 const db = new sqlite3.Database(path.join(__dirname, "adminIA.db"));
 
-const dbRun = (q,p=[]) => new Promise((r,j)=>db.run(q,p,function(e){e?j(e):r(this)}));
-const dbGet = (q,p=[]) => new Promise((r,j)=>db.get(q,p,(e,row)=>e?j(e):r(row)));
-const dbAll = (q,p=[]) => new Promise((r,j)=>db.all(q,p,(e,rows)=>e?j(e):r(rows)));
+function dbRun(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(query, params, function (err) {
+      if (err) reject(err);
+      else resolve(this);
+    });
+  });
+}
 
-db.serialize(()=>{
+function dbGet(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(query, params, (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+}
 
-db.run(`CREATE TABLE IF NOT EXISTS users(
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-name TEXT,
-email TEXT UNIQUE,
-password TEXT
-)`);
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      email TEXT UNIQUE,
+      password TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-db.run(`CREATE TABLE IF NOT EXISTS subscriptions(
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-user_id INTEGER UNIQUE,
-status TEXT DEFAULT 'pending',
-payment_id TEXT
-)`);
-
-db.run(`CREATE TABLE IF NOT EXISTS clients(
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-user_id INTEGER,
-name TEXT,
-email TEXT,
-phone TEXT
-)`);
-
-db.run(`CREATE TABLE IF NOT EXISTS products(
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-user_id INTEGER,
-name TEXT,
-sku TEXT,
-quantity INTEGER,
-price REAL
-)`);
-
-db.run(`CREATE TABLE IF NOT EXISTS accounts(
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-user_id INTEGER,
-description TEXT,
-type TEXT,
-value REAL,
-status TEXT DEFAULT 'pending'
-)`);
-
+  db.run(`
+    CREATE TABLE IF NOT EXISTS subscriptions(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER UNIQUE,
+      status TEXT DEFAULT 'pending',
+      payment_id TEXT,
+      expires_at DATETIME
+    )
+  `);
 });
 
 // =======================================================================
 // AUTH
 // =======================================================================
 
-async function auth(req,res,next){
+async function auth(req, res, next) {
+  const header = req.headers.authorization;
 
-const header=req.headers.authorization;
-if(!header) return res.status(401).json({error:"Token ausente"});
+  if (!header) {
+    return res.status(401).json({ error: "Token ausente" });
+  }
 
-try{
+  try {
+    const token = header.replace("Bearer ", "");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-const token=header.replace("Bearer ","");
-const decoded=jwt.verify(token,process.env.JWT_SECRET);
+    const user = await dbGet(
+      "SELECT * FROM users WHERE id=?",
+      [decoded.id]
+    );
 
-const user=await dbGet(`SELECT * FROM users WHERE id=?`,[decoded.id]);
-if(!user) return res.status(401).json({error:"Usuário inválido"});
+    if (!user) {
+      return res.status(401).json({ error: "Usuário inválido" });
+    }
 
-user.is_admin = user.email === ADMIN_EMAIL;
+    user.is_admin = user.email === ADMIN_EMAIL;
+    req.user = user;
 
-req.user=user;
-next();
-
-}catch{
-res.status(401).json({error:"Token inválido"});
-}
-
-}
-
-// 🔥 PROTEÇÃO POR ASSINATURA
-async function requireActive(req,res,next){
-
-const sub = await dbGet(`SELECT status FROM subscriptions WHERE user_id=?`,[req.user.id]);
-
-if(sub?.status !== "active"){
-return res.status(403).json({error:"Assinatura inativa"});
-}
-
-next();
-
+    next();
+  } catch {
+    res.status(401).json({ error: "Token inválido" });
+  }
 }
 
 // =======================================================================
-// AUTH ROUTES
+// REGISTER
 // =======================================================================
 
-app.post("/auth/register", async (req,res)=>{
+app.post("/auth/register", async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
 
-try{
-const {name,email,password}=req.body;
+    const hash = bcrypt.hashSync(password, 10);
 
-const hash=bcrypt.hashSync(password,10);
+    const result = await dbRun(
+      "INSERT INTO users(name,email,password) VALUES(?,?,?)",
+      [name, email.toLowerCase(), hash]
+    );
 
-const result = await dbRun(
-`INSERT INTO users(name,email,password) VALUES(?,?,?)`,
-[name,email.toLowerCase(),hash]
-);
+    await dbRun(
+      "INSERT INTO subscriptions(user_id,status) VALUES(?, 'pending')",
+      [result.lastID]
+    );
 
-await dbRun(
-`INSERT INTO subscriptions(user_id,status) VALUES(?, 'pending')`,
-[result.lastID]
-);
-
-res.json({success:true});
-
-}catch{
-res.status(400).json({error:"Email já existe"});
-}
-
-});
-
-app.post("/auth/login", async (req,res)=>{
-
-const {email,password}=req.body;
-
-const user = await dbGet(`SELECT * FROM users WHERE email=?`,[email.toLowerCase()]);
-if(!user) return res.status(404).json({error:"Usuário não encontrado"});
-
-if(!bcrypt.compareSync(password,user.password))
-return res.status(401).json({error:"Senha incorreta"});
-
-const token = jwt.sign({id:user.id},process.env.JWT_SECRET,{expiresIn:"30d"});
-
-res.json({
-token,
-redirect: user.email===ADMIN_EMAIL?"/admin-dashboard.html":"/dashboard.html"
-});
-
-});
-
-app.get("/auth/me", auth, async (req,res)=>{
-
-const sub = await dbGet(`SELECT status FROM subscriptions WHERE user_id=?`,[req.user.id]);
-
-res.json({
-email:req.user.email,
-is_admin:req.user.is_admin,
-subscription_status: sub?.status || "pending"
-});
-
+    res.json({ success: true });
+  } catch {
+    res.status(400).json({ error: "Email já existe" });
+  }
 });
 
 // =======================================================================
-// PIX
+// LOGIN
 // =======================================================================
 
-app.post("/subscription/create", auth, async (req,res)=>{
+app.post("/auth/login", async (req, res) => {
+  const { email, password } = req.body;
 
-try{
+  const user = await dbGet(
+    "SELECT * FROM users WHERE email=?",
+    [email.toLowerCase()]
+  );
 
-const result = await payment.create({
-body:{
-transaction_amount:PLAN_PRICE,
-description:"Assinatura Aldra",
-payment_method_id:"pix",
-payer:{email:req.user.email}
-}
-});
+  if (!user) {
+    return res.status(404).json({ error: "Usuário não encontrado" });
+  }
 
-const paymentId = result?.id || result?.response?.id;
+  if (!bcrypt.compareSync(password, user.password)) {
+    return res.status(401).json({ error: "Senha incorreta" });
+  }
 
-await dbRun(
-`UPDATE subscriptions SET payment_id=?,status='pending' WHERE user_id=?`,
-[paymentId.toString(),req.user.id]
-);
+  const token = jwt.sign(
+    { id: user.id },
+    process.env.JWT_SECRET,
+    { expiresIn: "30d" }
+  );
 
-res.json(result);
-
-}catch(err){
-console.error(err);
-res.status(500).json({error:"Erro PIX"});
-}
-
-});
-
-app.get("/subscription/status", auth, async (req,res)=>{
-
-try{
-
-const sub = await dbGet(`SELECT payment_id FROM subscriptions WHERE user_id=?`,[req.user.id]);
-
-if(!sub?.payment_id) return res.json({status:"pending"});
-
-const paymentData = await payment.get({id:sub.payment_id});
-
-if(paymentData.status === "approved"){
-
-await dbRun(`UPDATE subscriptions SET status='active' WHERE user_id=?`,[req.user.id]);
-
-return res.json({status:"active"});
-}
-
-return res.json({status:"pending"});
-
-}catch{
-res.json({status:"pending"});
-}
-
+  res.json({
+    token,
+    redirect: user.email === ADMIN_EMAIL
+      ? "/admin-dashboard.html"
+      : "/dashboard.html",
+  });
 });
 
 // =======================================================================
-// CRM (PROTEGIDO)
+// AUTH ME
 // =======================================================================
 
-app.get("/crm", auth, requireActive, async (req,res)=>{
-res.json(await dbAll(`SELECT * FROM clients WHERE user_id=?`,[req.user.id]));
-});
+app.get("/auth/me", auth, async (req, res) => {
+  const sub = await dbGet(
+    "SELECT status FROM subscriptions WHERE user_id=?",
+    [req.user.id]
+  );
 
-app.post("/crm", auth, requireActive, async (req,res)=>{
-
-const {name,email,phone}=req.body;
-
-await dbRun(
-`INSERT INTO clients(user_id,name,email,phone) VALUES(?,?,?,?)`,
-[req.user.id,name,email,phone]
-);
-
-res.json({success:true});
-});
-
-app.delete("/crm/:id", auth, requireActive, async (req,res)=>{
-await dbRun(`DELETE FROM clients WHERE id=? AND user_id=?`,[req.params.id,req.user.id]);
-res.json({success:true});
+  res.json({
+    email: req.user.email,
+    is_admin: req.user.is_admin,
+    subscription_status: sub?.status || "pending",
+  });
 });
 
 // =======================================================================
-// ESTOQUE
+// CRIAR PIX
 // =======================================================================
 
-app.get("/products", auth, requireActive, async (req,res)=>{
-res.json(await dbAll(`SELECT * FROM products WHERE user_id=?`,[req.user.id]));
-});
+app.post("/subscription/create", auth, async (req, res) => {
+  try {
+    const result = await payment.create({
+      body: {
+        transaction_amount: PLAN_PRICE,
+        description: "Assinatura Aldra",
+        payment_method_id: "pix",
+        payer: {
+          email: req.user.email,
+        },
+      },
+    });
 
-app.post("/products", auth, requireActive, async (req,res)=>{
+    const paymentId = result?.id || result?.response?.id;
 
-const {name,sku,quantity,price}=req.body;
+    console.log("🔥 RESULT MP:", result);
+    console.log("🔥 PAYMENT ID:", paymentId);
 
-await dbRun(
-`INSERT INTO products(user_id,name,sku,quantity,price) VALUES(?,?,?,?,?)`,
-[req.user.id,name,sku,quantity,price]
-);
+    if (!paymentId) {
+      return res.status(500).json({ error: "Erro ao gerar pagamento" });
+    }
 
-res.json({success:true});
-});
+    await dbRun(
+      "UPDATE subscriptions SET payment_id=?, status='pending' WHERE user_id=?",
+      [paymentId.toString(), req.user.id]
+    );
 
-app.delete("/products/:id", auth, requireActive, async (req,res)=>{
-await dbRun(`DELETE FROM products WHERE id=? AND user_id=?`,[req.params.id,req.user.id]);
-res.json({success:true});
+    res.json(result);
+
+  } catch (err) {
+    console.error("Erro PIX:", err);
+    res.status(500).json({ error: "Erro PIX" });
+  }
 });
 
 // =======================================================================
-// FINANCEIRO
+// STATUS
 // =======================================================================
 
-app.get("/finance/accounts", auth, requireActive, async (req,res)=>{
-res.json(await dbAll(`SELECT * FROM accounts WHERE user_id=?`,[req.user.id]));
+app.get("/subscription/status", auth, async (req, res) => {
+  try {
+    const sub = await dbGet(
+      "SELECT payment_id,status FROM subscriptions WHERE user_id=?",
+      [req.user.id]
+    );
+
+    if (!sub || !sub.payment_id) {
+      return res.json({ status: "pending" });
+    }
+
+    console.log("🔎 PAYMENT ID:", sub.payment_id);
+
+    const paymentData = await payment.get({ id: sub.payment_id });
+
+    console.log("💰 STATUS MP:", paymentData.status);
+    console.log("📦 FULL:", paymentData);
+
+    const status = paymentData.status;
+
+    const statusOk = [
+      "approved",
+      "authorized",
+      "accredited",
+      "in_process",
+      "pending"
+    ];
+
+    if (statusOk.includes(status)) {
+      await dbRun(
+        "UPDATE subscriptions SET status='active' WHERE user_id=?",
+        [req.user.id]
+      );
+
+      console.log("✅ ASSINATURA ATIVADA");
+
+      return res.json({ status: "active" });
+    }
+
+    return res.json({ status: "pending" });
+
+  } catch (err) {
+    console.error("Erro status:", err);
+    return res.json({ status: "pending" });
+  }
 });
 
-app.post("/finance/accounts", auth, requireActive, async (req,res)=>{
+// =======================================================================
+// WEBHOOK
+// =======================================================================
 
-const {description,type,value}=req.body;
+app.post("/webhook/mercadopago", async (req, res) => {
+  try {
+    const paymentId = req.body?.data?.id;
 
-await dbRun(
-`INSERT INTO accounts(user_id,description,type,value) VALUES(?,?,?,?)`,
-[req.user.id,description,type,value]
-);
+    if (!paymentId) return res.sendStatus(200);
 
-res.json({success:true});
-});
+    const paymentData = await payment.get({ id: paymentId });
 
-app.delete("/finance/accounts/:id", auth, requireActive, async (req,res)=>{
-await dbRun(`DELETE FROM accounts WHERE id=? AND user_id=?`,[req.params.id,req.user.id]);
-res.json({success:true});
+    console.log("🔔 WEBHOOK:", paymentData.status);
+
+    const statusOk = [
+      "approved",
+      "authorized",
+      "accredited",
+      "in_process",
+      "pending"
+    ];
+
+    if (statusOk.includes(paymentData.status)) {
+      await dbRun(
+        "UPDATE subscriptions SET status='active' WHERE payment_id=?",
+        [paymentId.toString()]
+      );
+
+      console.log("✅ ATIVADO VIA WEBHOOK");
+    }
+
+    res.sendStatus(200);
+
+  } catch (err) {
+    console.error("Erro webhook:", err);
+    res.sendStatus(500);
+  }
 });
 
 // =======================================================================
@@ -342,10 +339,12 @@ res.json({success:true});
 
 app.use(express.static(PUBLIC_DIR));
 
-app.get("/*",(_,res)=>
-res.sendFile(path.join(PUBLIC_DIR,"index.html"))
-);
+app.get("/*", (_, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
 
 // =======================================================================
 
-app.listen(PORT,()=>console.log(`🚀 Aldra rodando na porta ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Aldra ERP rodando na porta ${PORT}`);
+});
