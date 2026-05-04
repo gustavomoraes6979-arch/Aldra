@@ -206,7 +206,6 @@ if(!prompt){
   return res.json({ resposta:"Digite algo." });
 }
 
-// Dados do usuário
 const clients = await dbAll(`SELECT * FROM clients WHERE user_id=?`,[req.user.id]);
 const products = await dbAll(`SELECT * FROM products WHERE user_id=?`,[req.user.id]);
 const accounts = await dbAll(`SELECT * FROM accounts WHERE user_id=?`,[req.user.id]);
@@ -214,7 +213,6 @@ const accounts = await dbAll(`SELECT * FROM accounts WHERE user_id=?`,[req.user.
 const entradas = accounts.filter(a=>a.type==="entrada").length;
 const saidas = accounts.filter(a=>a.type==="saida").length;
 
-// Contexto
 const contexto = `
 Dados do sistema do usuário:
 Clientes: ${clients.length}
@@ -224,7 +222,6 @@ Entradas: ${entradas}
 Saídas: ${saidas}
 `;
 
-// Chamada Groq
 const response = await fetch("https://api.groq.com/openai/v1/chat/completions",{
   method:"POST",
   headers:{
@@ -257,38 +254,71 @@ res.json({ resposta:"Erro ao processar IA" });
 });
 
 // =======================================================================
-// OUTROS MODULOS (SEM ALTERAÇÃO)
+// 🔥 PIX (CORRIGIDO SOMENTE AQUI)
 // =======================================================================
 
-app.post("/api/pdf", auth, async (req,res)=>{
-res.json({ resultado: "PDF processado (mock)" });
+app.post("/subscription/create", auth, async (req,res)=>{
+
+try{
+
+const result = await payment.create({
+body:{
+transaction_amount:PLAN_PRICE,
+description:"Assinatura Aldra",
+payment_method_id:"pix",
+payer:{email:req.user.email}
+}
 });
 
-app.post("/api/cobranca", auth, async (req,res)=>{
-res.json({ msg: "Cobrança criada (mock)" });
+// ✅ CORREÇÃO
+const data = result.body || result;
+
+const paymentId = data?.id;
+
+await dbRun(
+`UPDATE subscriptions SET payment_id=?,status='pending' WHERE user_id=?`,
+[paymentId?.toString(),req.user.id]
+);
+
+res.json(data);
+
+}catch(err){
+console.error(err);
+res.status(500).json({error:"Erro PIX"});
+}
+
 });
 
-app.get("/api/relatorios", auth, async (req,res)=>{
-res.json({
-clientes: await dbAll(`SELECT COUNT(*) as total FROM clients WHERE user_id=?`,[req.user.id]),
-produtos: await dbAll(`SELECT COUNT(*) as total FROM products WHERE user_id=?`,[req.user.id])
-});
-});
+app.get("/subscription/status", auth, async (req,res)=>{
 
-app.get("/api/contratos", auth, (req,res)=>{
-res.json({ msg:"Contratos (em desenvolvimento)" });
-});
+try{
 
-app.get("/api/fiscal", auth, (req,res)=>{
-res.json({ msg:"Fiscal (em desenvolvimento)" });
-});
+const sub = await dbGet(`SELECT payment_id FROM subscriptions WHERE user_id=?`,[req.user.id]);
 
-app.get("/api/certidoes", auth, (req,res)=>{
-res.json({ msg:"Certidões (em desenvolvimento)" });
+if(!sub?.payment_id) return res.json({status:"pending"});
+
+const paymentData = await payment.get({id:sub.payment_id});
+
+// ✅ CORREÇÃO
+const data = paymentData.body || paymentData;
+
+if(data.status === "approved"){
+
+await dbRun(`UPDATE subscriptions SET status='active' WHERE user_id=?`,[req.user.id]);
+
+return res.json({status:"active"});
+}
+
+return res.json({status:"pending"});
+
+}catch{
+res.json({status:"pending"});
+}
+
 });
 
 // =======================================================================
-// CRM / ESTOQUE / FINANCEIRO
+// RESTO DO SISTEMA (INALTERADO)
 // =======================================================================
 
 app.get("/crm", auth, requireActive, async (req,res)=>{

@@ -120,7 +120,10 @@ async function checkPaymentStatus(){
   return false;
 }
 
-// PIX
+// ==========================================
+// PIX (🔥 CORRIGIDO)
+// ==========================================
+
 window.ativarPlano = async function(){
 
   const res = await fetch("/subscription/create",{
@@ -130,11 +133,18 @@ window.ativarPlano = async function(){
 
   const data = await safeJson(res);
 
-  const pixData =
-    data?.point_of_interaction?.transaction_data ||
-    data?.transaction_data;
+  let pixData = null;
 
-  if(!pixData){
+  // cobre todos os formatos possíveis
+  if (data?.point_of_interaction?.transaction_data) {
+    pixData = data.point_of_interaction.transaction_data;
+  } else if (data?.transaction_data) {
+    pixData = data.transaction_data;
+  } else if (data?.response?.point_of_interaction?.transaction_data) {
+    pixData = data.response.point_of_interaction.transaction_data;
+  }
+
+  if(!pixData || !pixData.qr_code){
     alert("Erro PIX");
     return;
   }
