@@ -1,5 +1,5 @@
 // ==========================================
-// dashboard.js — ALDRA ERP COMPLETO (FIX)
+// dashboard.js — ALDRA ERP COMPLETO (FULL)
 // ==========================================
 
 console.log("🚀 Aldra Dashboard iniciado");
@@ -26,7 +26,7 @@ const financeiroLista = document.getElementById("financeiroLista");
 const adminBtn = document.getElementById("adminBtn");
 
 // ESTADO
-let subscriptionActive = true; // 🔥 LIBERADO PRA FUNCIONAR
+let subscriptionActive = true;
 let isAdmin = false;
 
 // ==========================================
@@ -86,7 +86,6 @@ async function checkUser(){
       adminBtn.style.display="inline-block";
     }
 
-    // 🔥 NÃO BLOQUEIA MAIS A UI
     if(data.subscription_status === "active"){
       hideAlert();
     }else{
@@ -162,13 +161,21 @@ function startPaymentCheck(){
 }
 
 // ==========================================
-// SEÇÕES (SPA FUNCIONANDO)
+// SEÇÕES (ATUALIZADO COM TODOS)
 // ==========================================
 
 const sections = [
 "sectionCRM",
 "sectionEstoque",
-"sectionFinanceiro"
+"sectionFinanceiro",
+"sectionChat",
+"sectionPDF",
+"sectionCobranca",
+"sectionRelatorios",
+"sectionContrato",
+"sectionFiscal",
+"sectionCertidoes",
+"sectionAdmin"
 ];
 
 function hideAllSections(){
@@ -179,7 +186,6 @@ function hideAllSections(){
 
 window.showSection = function(name){
 
-  // 🔥 NÃO BLOQUEIA MAIS OS BOTÕES
   hideAllSections();
 
   const section = document.getElementById("section"+name);
@@ -191,6 +197,75 @@ window.showSection = function(name){
   if(name==="CRM") loadClients();
   if(name==="Estoque") loadProdutos();
   if(name==="Financeiro") loadFinanceiro();
+};
+
+// ==========================================
+// 🤖 IA
+// ==========================================
+
+window.enviarIA = async function(){
+
+  const prompt = document.getElementById("chatInput").value;
+
+  if(!prompt) return;
+
+  const res = await fetch("/api/ia",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      Authorization:"Bearer "+token
+    },
+    body: JSON.stringify({ prompt })
+  });
+
+  const data = await safeJson(res);
+
+  document.getElementById("chatResposta").innerText =
+    data.resposta || "Sem resposta";
+};
+
+// ==========================================
+// 📄 PDF
+// ==========================================
+
+window.enviarPDF = async function(){
+
+  const file = document.getElementById("pdfFile").files[0];
+  if(!file) return alert("Selecione um PDF");
+
+  const formData = new FormData();
+  formData.append("pdf", file);
+
+  const res = await fetch("/api/pdf",{
+    method:"POST",
+    headers:{ Authorization:"Bearer "+token },
+    body: formData
+  });
+
+  const data = await safeJson(res);
+
+  document.getElementById("pdfResultado").innerText =
+    data.resultado || "Processado";
+};
+
+// ==========================================
+// 💳 COBRANÇA
+// ==========================================
+
+window.criarCobranca = async function(){
+
+  const res = await fetch("/api/cobranca",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      Authorization:"Bearer "+token
+    }
+  });
+
+  const data = await safeJson(res);
+
+  document.getElementById("cobrancaResultado").innerText =
+    data.msg || "Cobrança criada";
 };
 
 // ==========================================
@@ -362,7 +437,6 @@ async function init(){
     await checkPaymentStatus();
   },10000);
 
-  // 🔥 AGORA INICIA CORRETO
   showSection("CRM");
 }
 

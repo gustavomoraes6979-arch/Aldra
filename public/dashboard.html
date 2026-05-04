@@ -26,8 +26,6 @@ background:var(--bg);
 font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
 }
 
-/* HEADER */
-
 header{
 background:var(--white);
 padding:18px 32px;
@@ -36,8 +34,6 @@ justify-content:space-between;
 align-items:center;
 border-bottom:1px solid var(--borda);
 }
-
-/* MENU */
 
 .menu{
 display:flex;
@@ -53,8 +49,6 @@ background:var(--azul);
 color:#fff;
 }
 
-/* SEÇÕES */
-
 .section{
 display:none;
 background:var(--white);
@@ -68,9 +62,7 @@ box-shadow:var(--shadow);
 display:block;
 }
 
-/* FORM */
-
-input{
+input, textarea{
 width:100%;
 padding:10px;
 margin-top:8px;
@@ -92,8 +84,6 @@ color:#fff;
 margin-top:10px;
 }
 
-/* TABELA */
-
 table{
 width:100%;
 margin-top:20px;
@@ -104,8 +94,6 @@ th,td{
 padding:10px;
 border-bottom:1px solid #ddd;
 }
-
-/* ALERTA */
 
 .alert{
 display:none;
@@ -126,11 +114,6 @@ display:block;
 margin-bottom:10px;
 }
 
-textarea{
-width:100%;
-height:100px;
-}
-
 </style>
 
 </head>
@@ -139,145 +122,131 @@ height:100px;
 
 <header>
 <h1>🚀 Aldra</h1>
-
 <div>
-<button id="adminBtn" style="display:none;">Admin</button>
+<button id="adminBtn" style="display:none;" onclick="showSection('Admin')">Admin</button>
 <button onclick="logout()">Sair</button>
 </div>
-
 </header>
-
-<!-- ALERTA -->
 
 <div id="alert" class="alert">
 ⚠️ Assinatura inativa
-
-<button onclick="ativarPlano()" class="action">
-Ativar Plano R$1
-</button>
+<button onclick="ativarPlano()" class="action">Ativar Plano R$1</button>
 
 <div id="pixBox" class="pix-box">
 <img id="qrImage">
 <textarea id="pixCode" readonly></textarea>
 </div>
-
 </div>
 
-<!-- MENU -->
+<!-- MENU COMPLETO -->
 
 <div class="menu">
 <button onclick="showSection('CRM')">CRM</button>
 <button onclick="showSection('Estoque')">Estoque</button>
 <button onclick="showSection('Financeiro')">Financeiro</button>
+<button onclick="showSection('Chat')">IA</button>
+<button onclick="showSection('PDF')">PDF</button>
+<button onclick="showSection('Cobranca')">Cobrança</button>
+<button onclick="showSection('Relatorios')">Relatórios</button>
+<button onclick="showSection('Contrato')">Contratos</button>
+<button onclick="showSection('Fiscal')">Fiscal</button>
+<button onclick="showSection('Certidoes')">Certidões</button>
 </div>
 
-<!-- ================= CRM ================= -->
-
+<!-- CRM -->
 <div id="sectionCRM" class="section active">
-
 <h2>CRM</h2>
-
 <input id="crmNome" placeholder="Nome">
 <input id="crmEmail" placeholder="Email">
 <input id="crmTelefone" placeholder="Telefone">
-
-<button class="action" onclick="salvarCliente()">
-Adicionar Cliente
-</button>
-
-<table>
-<thead>
-<tr>
-<th>Nome</th>
-<th>Email</th>
-<th>Telefone</th>
-<th>Ação</th>
-</tr>
-</thead>
-
-<tbody id="crmLista"></tbody>
-</table>
-
+<button class="action" onclick="salvarCliente()">Adicionar Cliente</button>
+<table><thead><tr><th>Nome</th><th>Email</th><th>Telefone</th><th>Ação</th></tr></thead>
+<tbody id="crmLista"></tbody></table>
 </div>
 
-<!-- ================= ESTOQUE ================= -->
-
+<!-- ESTOQUE -->
 <div id="sectionEstoque" class="section">
-
 <h2>Estoque</h2>
-
 <input id="prodNome" placeholder="Produto">
 <input id="prodSku" placeholder="SKU">
 <input id="prodQtd" placeholder="Quantidade">
 <input id="prodPreco" placeholder="Preço">
-
-<button class="action" onclick="addProduto()">
-Adicionar Produto
-</button>
-
-<table>
-<thead>
-<tr>
-<th>Produto</th>
-<th>SKU</th>
-<th>Qtd</th>
-<th>Preço</th>
-<th>Ação</th>
-</tr>
-</thead>
-
-<tbody id="estoqueLista"></tbody>
-</table>
-
+<button class="action" onclick="addProduto()">Adicionar Produto</button>
+<table><thead><tr><th>Produto</th><th>SKU</th><th>Qtd</th><th>Preço</th><th>Ação</th></tr></thead>
+<tbody id="estoqueLista"></tbody></table>
 </div>
 
-<!-- ================= FINANCEIRO ================= -->
-
+<!-- FINANCEIRO -->
 <div id="sectionFinanceiro" class="section">
-
 <h2>Financeiro</h2>
-
 <input id="finDesc" placeholder="Descrição">
-<input id="finTipo" placeholder="Tipo (entrada/saida)">
+<input id="finTipo" placeholder="Tipo">
 <input id="finValor" placeholder="Valor">
+<button class="action" onclick="addConta()">Adicionar Conta</button>
+<table><thead><tr><th>Descrição</th><th>Tipo</th><th>Valor</th><th>Status</th><th>Ação</th></tr></thead>
+<tbody id="financeiroLista"></tbody></table>
+</div>
 
-<button class="action" onclick="addConta()">
-Adicionar Conta
-</button>
+<!-- IA -->
+<div id="sectionChat" class="section">
+<h2>IA Aldra</h2>
+<textarea id="chatInput" placeholder="Pergunte algo..."></textarea>
+<button class="action" onclick="enviarIA()">Enviar</button>
+<div id="chatResposta"></div>
+</div>
 
-<table>
-<thead>
-<tr>
-<th>Descrição</th>
-<th>Tipo</th>
-<th>Valor</th>
-<th>Status</th>
-<th>Ação</th>
-</tr>
-</thead>
+<!-- PDF -->
+<div id="sectionPDF" class="section">
+<h2>PDF</h2>
+<input type="file" id="pdfFile">
+<button class="action" onclick="enviarPDF()">Analisar</button>
+<div id="pdfResultado"></div>
+</div>
 
-<tbody id="financeiroLista"></tbody>
-</table>
+<!-- COBRANÇA -->
+<div id="sectionCobranca" class="section">
+<h2>Cobrança</h2>
+<button class="action" onclick="criarCobranca()">Gerar cobrança</button>
+<div id="cobrancaResultado"></div>
+</div>
 
+<!-- RELATORIOS -->
+<div id="sectionRelatorios" class="section">
+<h2>Relatórios</h2>
+<p>Em desenvolvimento</p>
+</div>
+
+<!-- CONTRATO -->
+<div id="sectionContrato" class="section">
+<h2>Contratos</h2>
+<p>Em desenvolvimento</p>
+</div>
+
+<!-- FISCAL -->
+<div id="sectionFiscal" class="section">
+<h2>Fiscal</h2>
+<p>Em desenvolvimento</p>
+</div>
+
+<!-- CERTIDOES -->
+<div id="sectionCertidoes" class="section">
+<h2>Certidões</h2>
+<p>Em desenvolvimento</p>
+</div>
+
+<!-- ADMIN -->
+<div id="sectionAdmin" class="section">
+<h2>Admin</h2>
+<p>Painel administrativo</p>
 </div>
 
 <script src="/js/dashboard.js"></script>
 
-<!-- 🔥 LÓGICA SPA (ADICIONADA) -->
 <script>
 function showSection(nome){
-
-  // remove active de todas
-  document.querySelectorAll('.section').forEach(sec => {
-    sec.classList.remove('active');
-  });
-
-  // adiciona active na selecionada
-  const alvo = document.getElementById('section' + nome);
-  if(alvo){
-    alvo.classList.add('active');
-  }
-
+document.querySelectorAll('.section').forEach(sec=>sec.classList.remove('active'));
+const alvo=document.getElementById('section'+nome);
+if(alvo) alvo.classList.add('active');
 }
 </script>
 
