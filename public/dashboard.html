@@ -263,5 +263,23 @@ Adicionar Conta
 
 <script src="/js/dashboard.js"></script>
 
+<!-- 🔥 LÓGICA SPA (ADICIONADA) -->
+<script>
+function showSection(nome){
+
+  // remove active de todas
+  document.querySelectorAll('.section').forEach(sec => {
+    sec.classList.remove('active');
+  });
+
+  // adiciona active na selecionada
+  const alvo = document.getElementById('section' + nome);
+  if(alvo){
+    alvo.classList.add('active');
+  }
+
+}
+</script>
+
 </body>
 </html>
